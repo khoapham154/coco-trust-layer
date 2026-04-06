@@ -1,0 +1,36 @@
+id: twenty.contact_delete
+action: delete_contact
+description: >
+  Contact lifecycle governance: a contact can only be deleted when no open
+  deals reference it, it hasn't been touched recently, and the caller has
+  admin role.
+
+pre_conditions:
+  - id: admin_only
+    type: equals
+    path: user.role
+    value: admin
+    on_fail: BLOCK
+    reason: Only admin users can delete contacts
+  - id: no_open_opportunities
+    type: equals
+    path: contact.open_opportunity_count
+    value: 0
+    on_fail: BLOCK
+    reason: Contact has active deals and cannot be deleted
+  - id: not_recent
+    type: greater_than
+    path: contact.days_since_modified
+    value: 7
+    on_fail: ESCALATE
+    reason: Contact was modified in the last 7 days; escalate for review
+
+constraints: []
+
+post_conditions:
+  - id: contact_removed
+    type: equals
+    path: ui.contact_in_views
+    value: false
+    on_fail: BLOCK
+    reason: Contact still visible in views after delete

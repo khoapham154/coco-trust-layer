@@ -1,0 +1,41 @@
+services:
+  coco-gateway:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: coco-gateway
+    ports:
+      - "8080:8080"
+    volumes:
+      - ../data/twenty/packs:/app/packs/twenty/packs:ro
+      - ../data/runtime:/app/data
+    environment:
+      COCO_PACK_DIR: /app/packs/twenty/packs
+      COCO_DB_PATH: /app/data/audit.db
+      COCO_PORT: "8080"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8080/health').getcode()==200 else 1)"
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+    networks:
+      - coco-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: coco-redis
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    networks:
+      - coco-net
+
+networks:
+  coco-net:
+    driver: bridge

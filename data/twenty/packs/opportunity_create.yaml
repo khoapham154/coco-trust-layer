@@ -1,0 +1,30 @@
+id: twenty.opportunity_create
+action: create_opportunity
+description: >
+  Deal creation governance: every opportunity must reference a real
+  company, have a positive amount, and a close date in the future.
+
+pre_conditions:
+  - id: company_exists
+    type: not_empty
+    path: opportunity.company_id
+    on_fail: BLOCK
+    reason: Opportunity must reference a company
+
+constraints:
+  - id: amount_positive
+    rule: opportunity.amount > 0
+    on_fail: BLOCK
+    reason: Opportunity value must be positive
+  - id: close_date_future
+    rule: opportunity.close_date_is_future == true
+    on_fail: BLOCK
+    reason: Close date must be in the future
+
+post_conditions:
+  - id: appears_in_pipeline
+    type: equals
+    path: ui.opportunity_in_pipeline
+    value: true
+    on_fail: BLOCK
+    reason: Opportunity not visible in pipeline after create

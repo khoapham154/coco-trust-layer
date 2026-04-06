@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>CoCo SDK — browser smoke test</title>
+  <style>
+    :root {
+      --bg: #0b0f17;
+      --card: #111827;
+      --border: #1f2937;
+      --fg: #e5e7eb;
+      --muted: #94a3b8;
+      --allow: #16a34a;
+      --block: #dc2626;
+      --escalate: #eab308;
+      --accent: #2563eb;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      padding: 48px 24px;
+    }
+    .container { max-width: 860px; width: 100%; }
+    h1 { margin: 0 0 8px; font-size: 28px; }
+    .subtitle { color: var(--muted); margin-bottom: 32px; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+    .card h2 { margin: 0 0 12px; font-size: 16px; color: var(--muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; }
+    label { display: block; font-size: 14px; color: var(--muted); margin-bottom: 6px; }
+    input, select, textarea {
+      width: 100%;
+      padding: 10px 12px;
+      background: #0b1220;
+      border: 1px solid var(--border);
+      color: var(--fg);
+      border-radius: 8px;
+      font-family: "SF Mono", Menlo, Consolas, monospace;
+      font-size: 13px;
+    }
+    textarea { min-height: 200px; resize: vertical; }
+    .row { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
+    button {
+      background: var(--accent);
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 12px;
+    }
+    button:hover { filter: brightness(1.1); }
+    .verdict {
+      padding: 20px;
+      border-radius: 8px;
+      margin-top: 16px;
+      font-family: "SF Mono", Menlo, Consolas, monospace;
+      font-size: 13px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .verdict.ALLOW { background: rgba(22,163,74,0.15); border: 1px solid var(--allow); }
+    .verdict.BLOCK { background: rgba(220,38,38,0.15); border: 1px solid var(--block); }
+    .verdict.ESCALATE { background: rgba(234,179,8,0.15); border: 1px solid var(--escalate); }
+    .verdict.ERROR { background: rgba(220,38,38,0.15); border: 1px solid var(--block); }
+    .badge { display: inline-block; padding: 4px 10px; border-radius: 999px; font-weight: 700; margin-right: 8px; }
+    .badge.ALLOW { background: var(--allow); color: #fff; }
+    .badge.BLOCK { background: var(--block); color: #fff; }
+    .badge.ESCALATE { background: var(--escalate); color: #000; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>CoCo SDK — smoke test</h1>
+    <p class="subtitle">Fires a request against the Trust Layer Gateway and renders the verdict.</p>
+
+    <div class="card">
+      <h2>Gateway</h2>
+      <label for="gatewayUrl">Gateway URL</label>
+      <input id="gatewayUrl" value="http://localhost:8080" />
+    </div>
+
+    <div class="card">
+      <h2>Request</h2>
+      <div class="row">
+        <div>
+          <label for="packId">Pack ID</label>
+          <select id="packId">
+            <option>twenty.deal_stage_move</option>
+            <option>twenty.contact_delete</option>
+            <option>twenty.opportunity_create</option>
+            <option>twenty.bulk_email</option>
+            <option>twenty.field_update</option>
+          </select>
+        </div>
+        <div>
+          <label for="action">Action</label>
+          <input id="action" value="move_stage" />
+        </div>
+      </div>
+      <label for="uiState" style="margin-top: 12px;">UI State (JSON)</label>
+      <textarea id="uiState">{
+  "deal": {
+    "owner": null,
+    "amount": 40000,
+    "prev_stage_tasks_completed": true,
+    "is_sequential_stage_move": true,
+    "manager_field_filled": false,
+    "target_stage": "negotiation"
+  },
+  "user": { "role": "sales" }
+}</textarea>
+      <button id="runBtn">Validate</button>
+    </div>
+
+    <div class="card">
+      <h2>Verdict</h2>
+      <div id="verdict" class="verdict">No request yet. Click Validate.</div>
+    </div>
+  </div>
+
+  <script src="coco-sdk.js"></script>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const verdictEl = $("verdict");
+
+    async function run() {
+      const gatewayUrl = $("gatewayUrl").value.trim();
+      const packId = $("packId").value.trim();
+      const action = $("action").value.trim();
+      let uiState;
+      try {
+        uiState = JSON.parse($("uiState").value);
+      } catch (e) {
+        verdictEl.className = "verdict ERROR";
+        verdictEl.textContent = "Invalid JSON in UI state: " + e.message;
+        return;
+      }
+      try {
+        CoCo.reset();
+        CoCo.init({ gatewayUrl, appId: "twenty" });
+        const decision = await CoCo.validate(action, uiState, packId, "pre");
+        verdictEl.className = "verdict " + decision.verdict;
+        verdictEl.innerHTML =
+          '<span class="badge ' + decision.verdict + '">' + decision.verdict + '</span>' +
+          decision.primary_reason + "\n\n" +
+          JSON.stringify(decision, null, 2);
+      } catch (e) {
+        verdictEl.className = "verdict ERROR";
+        verdictEl.textContent = "Request failed: " + e.message;
+      }
+    }
+
+    $("runBtn").addEventListener("click", run);
+  </script>
+</body>
+</html>

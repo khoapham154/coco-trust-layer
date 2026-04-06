@@ -1,0 +1,37 @@
+id: twenty.deal_stage_move
+action: move_stage
+description: >
+  Pipeline governance: a deal can only move stages when the owner is
+  assigned, previous stage tasks are complete, stages move sequentially,
+  and high-value deals have the manager field filled.
+
+pre_conditions:
+  - id: owner_exists
+    type: not_empty
+    path: deal.owner
+    on_fail: BLOCK
+    reason: Deal has no assigned owner
+  - id: prev_tasks_done
+    type: equals
+    path: deal.prev_stage_tasks_completed
+    value: true
+    on_fail: BLOCK
+    reason: Previous stage tasks are not complete
+
+constraints:
+  - id: sequential_stage
+    rule: deal.is_sequential_stage_move == true
+    on_fail: BLOCK
+    reason: Cannot skip deal stages
+  - id: high_value_manager
+    rule: deal.amount < 50000 or deal.manager_field_filled == true
+    on_fail: ESCALATE
+    reason: Deals over $50K require the manager field to be filled
+
+post_conditions:
+  - id: stage_updated_in_ui
+    type: equals
+    path: ui.deal_current_stage
+    value: negotiation
+    on_fail: BLOCK
+    reason: Stage change not reflected in UI

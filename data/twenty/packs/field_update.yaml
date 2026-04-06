@@ -1,0 +1,37 @@
+id: twenty.field_update
+action: update_field
+description: >
+  Data integrity governance: updates may only target live records, may not
+  clear required fields, and any email value must be well-formed.
+
+pre_conditions:
+  - id: record_exists
+    type: equals
+    path: record.exists
+    value: true
+    on_fail: BLOCK
+    reason: Record does not exist
+  - id: not_archived
+    type: equals
+    path: record.archived
+    value: false
+    on_fail: BLOCK
+    reason: Record is archived and cannot be edited
+
+constraints:
+  - id: required_filled
+    rule: field_update.required_fields_still_filled == true
+    on_fail: BLOCK
+    reason: Cannot clear a required field
+  - id: email_valid
+    rule: field_update.email_format_valid == true
+    on_fail: BLOCK
+    reason: Email field value is not a valid email address
+
+post_conditions:
+  - id: timestamp_bumped
+    type: equals
+    path: record.updated_timestamp_changed
+    value: true
+    on_fail: BLOCK
+    reason: Record updated_at timestamp did not change

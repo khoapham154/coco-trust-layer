@@ -1,0 +1,16 @@
+{
+  "scenario_name": "bulk_email_block_do_not_contact",
+  "pack_id": "twenty.bulk_email",
+  "action": "send_bulk_email",
+  "phase": "pre",
+  "ui_state": {
+    "email": {
+      "all_recipients_have_email": true,
+      "recipient_count": 12,
+      "has_flagged_recipient": true,
+      "subject": "Outreach"
+    }
+  },
+  "expected_verdict": "BLOCK",
+  "expected_reason_contains": "do-not-contact"
+}

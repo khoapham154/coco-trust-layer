@@ -1,0 +1,17 @@
+{
+  "scenario_name": "field_update_allow",
+  "pack_id": "twenty.field_update",
+  "action": "update_field",
+  "phase": "pre",
+  "ui_state": {
+    "record": { "exists": true, "archived": false, "id": "r_001" },
+    "field_update": {
+      "required_fields_still_filled": true,
+      "email_format_valid": true,
+      "field": "email",
+      "new_value": "alice@example.com"
+    }
+  },
+  "expected_verdict": "ALLOW",
+  "expected_reason_contains": "All checks passed"
+}

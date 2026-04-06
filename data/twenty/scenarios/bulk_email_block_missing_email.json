@@ -1,0 +1,16 @@
+{
+  "scenario_name": "bulk_email_block_missing_email",
+  "pack_id": "twenty.bulk_email",
+  "action": "send_bulk_email",
+  "phase": "pre",
+  "ui_state": {
+    "email": {
+      "all_recipients_have_email": false,
+      "recipient_count": 10,
+      "has_flagged_recipient": false,
+      "subject": "Welcome"
+    }
+  },
+  "expected_verdict": "BLOCK",
+  "expected_reason_contains": "missing"
+}

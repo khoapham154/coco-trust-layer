@@ -1,0 +1,32 @@
+id: twenty.bulk_email
+action: send_bulk_email
+description: >
+  Outreach governance: bulk email batches must have a valid recipient list,
+  stay under 50 recipients per batch, and skip any contact flagged as
+  do-not-contact.
+
+pre_conditions:
+  - id: all_have_email
+    type: equals
+    path: email.all_recipients_have_email
+    value: true
+    on_fail: BLOCK
+    reason: Some recipients are missing an email address
+
+constraints:
+  - id: under_limit
+    rule: email.recipient_count <= 50
+    on_fail: BLOCK
+    reason: Batch exceeds 50 recipients
+  - id: no_flagged
+    rule: email.has_flagged_recipient == false
+    on_fail: BLOCK
+    reason: Batch contains recipients tagged do-not-contact
+
+post_conditions:
+  - id: activity_logged
+    type: equals
+    path: email.activity_logged_for_all
+    value: true
+    on_fail: BLOCK
+    reason: Activity was not logged on all contacts

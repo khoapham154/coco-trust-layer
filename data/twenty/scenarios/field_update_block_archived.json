@@ -1,0 +1,17 @@
+{
+  "scenario_name": "field_update_block_archived",
+  "pack_id": "twenty.field_update",
+  "action": "update_field",
+  "phase": "pre",
+  "ui_state": {
+    "record": { "exists": true, "archived": true, "id": "r_002" },
+    "field_update": {
+      "required_fields_still_filled": true,
+      "email_format_valid": true,
+      "field": "name",
+      "new_value": "Bob"
+    }
+  },
+  "expected_verdict": "BLOCK",
+  "expected_reason_contains": "archived"
+}

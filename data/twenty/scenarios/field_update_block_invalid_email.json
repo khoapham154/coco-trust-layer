@@ -1,0 +1,17 @@
+{
+  "scenario_name": "field_update_block_invalid_email",
+  "pack_id": "twenty.field_update",
+  "action": "update_field",
+  "phase": "pre",
+  "ui_state": {
+    "record": { "exists": true, "archived": false, "id": "r_003" },
+    "field_update": {
+      "required_fields_still_filled": true,
+      "email_format_valid": false,
+      "field": "email",
+      "new_value": "not-an-email"
+    }
+  },
+  "expected_verdict": "BLOCK",
+  "expected_reason_contains": "email"
+}

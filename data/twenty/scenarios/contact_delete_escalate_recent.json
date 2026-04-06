@@ -1,0 +1,16 @@
+{
+  "scenario_name": "contact_delete_escalate_recent",
+  "pack_id": "twenty.contact_delete",
+  "action": "delete_contact",
+  "phase": "pre",
+  "ui_state": {
+    "user": { "role": "admin" },
+    "contact": {
+      "id": "c_789",
+      "open_opportunity_count": 0,
+      "days_since_modified": 2
+    }
+  },
+  "expected_verdict": "ESCALATE",
+  "expected_reason_contains": "modified"
+}

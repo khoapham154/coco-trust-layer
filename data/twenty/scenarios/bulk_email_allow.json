@@ -1,0 +1,16 @@
+{
+  "scenario_name": "bulk_email_allow",
+  "pack_id": "twenty.bulk_email",
+  "action": "send_bulk_email",
+  "phase": "pre",
+  "ui_state": {
+    "email": {
+      "all_recipients_have_email": true,
+      "recipient_count": 25,
+      "has_flagged_recipient": false,
+      "subject": "Q3 product update"
+    }
+  },
+  "expected_verdict": "ALLOW",
+  "expected_reason_contains": "All checks passed"
+}

@@ -1,0 +1,19 @@
+{
+  "scenario_name": "deal_stage_move_allow",
+  "pack_id": "twenty.deal_stage_move",
+  "action": "move_stage",
+  "phase": "pre",
+  "ui_state": {
+    "deal": {
+      "owner": "u_001",
+      "amount": 30000,
+      "prev_stage_tasks_completed": true,
+      "is_sequential_stage_move": true,
+      "manager_field_filled": false,
+      "target_stage": "negotiation"
+    },
+    "user": { "role": "sales" }
+  },
+  "expected_verdict": "ALLOW",
+  "expected_reason_contains": "All checks passed"
+}

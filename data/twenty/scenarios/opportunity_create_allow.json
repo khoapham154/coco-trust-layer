@@ -1,0 +1,16 @@
+{
+  "scenario_name": "opportunity_create_allow",
+  "pack_id": "twenty.opportunity_create",
+  "action": "create_opportunity",
+  "phase": "pre",
+  "ui_state": {
+    "opportunity": {
+      "company_id": "co_001",
+      "amount": 25000,
+      "close_date_is_future": true,
+      "name": "ACME Q3 deal"
+    }
+  },
+  "expected_verdict": "ALLOW",
+  "expected_reason_contains": "All checks passed"
+}

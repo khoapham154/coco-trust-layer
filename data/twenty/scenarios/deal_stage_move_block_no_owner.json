@@ -1,0 +1,19 @@
+{
+  "scenario_name": "deal_stage_move_block_no_owner",
+  "pack_id": "twenty.deal_stage_move",
+  "action": "move_stage",
+  "phase": "pre",
+  "ui_state": {
+    "deal": {
+      "owner": null,
+      "amount": 30000,
+      "prev_stage_tasks_completed": true,
+      "is_sequential_stage_move": true,
+      "manager_field_filled": false,
+      "target_stage": "negotiation"
+    },
+    "user": { "role": "sales" }
+  },
+  "expected_verdict": "BLOCK",
+  "expected_reason_contains": "owner"
+}

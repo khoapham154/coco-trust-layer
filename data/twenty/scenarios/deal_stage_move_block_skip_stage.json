@@ -1,0 +1,19 @@
+{
+  "scenario_name": "deal_stage_move_block_skip_stage",
+  "pack_id": "twenty.deal_stage_move",
+  "action": "move_stage",
+  "phase": "pre",
+  "ui_state": {
+    "deal": {
+      "owner": "u_001",
+      "amount": 20000,
+      "prev_stage_tasks_completed": true,
+      "is_sequential_stage_move": false,
+      "manager_field_filled": false,
+      "target_stage": "closed_won"
+    },
+    "user": { "role": "sales" }
+  },
+  "expected_verdict": "BLOCK",
+  "expected_reason_contains": "skip"
+}
