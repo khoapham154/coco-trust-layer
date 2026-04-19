@@ -10,9 +10,11 @@
       "prev_stage_tasks_completed": true,
       "is_sequential_stage_move": true,
       "manager_field_filled": false,
-      "target_stage": "negotiation"
+      "target_stage": "screening"
     },
-    "user": { "role": "sales" }
+    "user": {
+      "role": "sales"
+    }
   },
   "expected_verdict": "BLOCK",
   "expected_reason_contains": "owner"
