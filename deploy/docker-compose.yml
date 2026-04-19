@@ -1,4 +1,4 @@
-# CoCo Trust Layer — production-shape compose.
+# Coco Trust Layer — production-shape compose.
 #
 # Brings up the gateway (FastAPI + dashboard + SDK delivery) and a
 # Redis instance (reserved for queue work in later phases). Run with:

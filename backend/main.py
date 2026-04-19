@@ -1,4 +1,4 @@
-"""CoCo Trust Layer Gateway — FastAPI entrypoint."""
+"""Coco Trust Layer Gateway — FastAPI entrypoint."""
 
 from __future__ import annotations
 
@@ -40,7 +40,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="CoCo Trust Layer Gateway",
+    title="Coco Trust Layer Gateway",
     description=(
         "Runtime governance between AI agents and enterprise SaaS. "
         "Validates agent actions against Action Packs (YAML behavioral contracts)."
@@ -80,7 +80,7 @@ async def health() -> Dict[str, Any]:
 @app.get("/")
 async def root() -> Dict[str, Any]:
     return {
-        "name": "CoCo Trust Layer Gateway",
+        "name": "Coco Trust Layer Gateway",
         "version": "0.1.0",
         "endpoints": [
             "POST /api/validate",

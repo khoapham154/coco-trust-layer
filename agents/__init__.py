@@ -1,4 +1,4 @@
-"""CoCo reference agents — drivers that produce scenarios against live
+"""Coco reference agents — drivers that produce scenarios against live
 systems (currently Twenty CRM) and validate via the gateway before
 performing any mutation.
 """

@@ -1,4 +1,4 @@
-/* CoCo Trust Layer — content script.
+/* Coco Trust Layer — content script.
  *
  * Runs on every matching tab (localhost:3000 + *.twenty.com).
  * Its only job is to ask the service worker to inject the SDK into the
@@ -16,11 +16,11 @@
   function inject(retryOnFail = true) {
     chrome.runtime.sendMessage({ type: "coco:inject" }, (resp) => {
       if (chrome.runtime.lastError) {
-        console.warn("[CoCo] inject msg failed:", chrome.runtime.lastError.message);
+        console.warn("[Coco] inject msg failed:", chrome.runtime.lastError.message);
         return;
       }
       if (!resp || !resp.ok) {
-        console.warn("[CoCo] SDK inject failed:", resp && resp.reason);
+        console.warn("[Coco] SDK inject failed:", resp && resp.reason);
         if (retryOnFail) setTimeout(() => inject(false), 2000);
       }
     });

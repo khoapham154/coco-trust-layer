@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>CoCo SDK — browser smoke test</title>
+  <title>Coco SDK — browser smoke test</title>
   <style>
     :root {
       --bg: #0b0f17;
@@ -83,7 +83,7 @@
 </head>
 <body>
   <div class="container">
-    <h1>CoCo SDK — smoke test</h1>
+    <h1>Coco SDK — smoke test</h1>
     <p class="subtitle">Fires a request against the Trust Layer Gateway and renders the verdict.</p>
 
     <div class="card">
@@ -149,9 +149,9 @@
         return;
       }
       try {
-        CoCo.reset();
-        CoCo.init({ gatewayUrl, appId: "twenty" });
-        const decision = await CoCo.validate(action, uiState, packId, "pre");
+        Coco.reset();
+        Coco.init({ gatewayUrl, appId: "twenty" });
+        const decision = await Coco.validate(action, uiState, packId, "pre");
         verdictEl.className = "verdict " + decision.verdict;
         verdictEl.innerHTML =
           '<span class="badge ' + decision.verdict + '">' + decision.verdict + '</span>' +

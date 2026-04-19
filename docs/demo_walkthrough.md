@@ -1,4 +1,4 @@
-# CoCo Trust Layer — Team Demo Walkthrough
+# Coco Trust Layer — Team Demo Walkthrough
 
 A 7-minute live click-through. Run this in a team huddle once the gateway
 is up and (optionally) Twenty is up. No slides needed — the dashboard is
@@ -22,7 +22,7 @@ export TWENTY_API_KEY="..."
 python scripts/seed_twenty.py
 
 # 3. Open two browser tabs
-open http://localhost:8080/dashboard  # CoCo
+open http://localhost:8080/dashboard  # Coco
 open http://localhost:3000            # Twenty (if running)
 ```
 
@@ -34,9 +34,9 @@ Keep a terminal visible for the audit-log reveal at the end.
 
 ### 0. Frame it (30 seconds)
 
-> "CoCo is the Trust Layer between AI agents and enterprise SaaS. When
+> "Coco is the Trust Layer between AI agents and enterprise SaaS. When
 > an agent wants to move a deal, delete a contact, or send a bulk email,
-> it asks CoCo first. CoCo reads the live UI state, runs it through a
+> it asks Coco first. Coco reads the live UI state, runs it through a
 > YAML behavioral contract, and returns ALLOW, BLOCK, or ESCALATE. Every
 > verdict is audited. That's the whole product. Let me show you."
 
@@ -103,7 +103,7 @@ laptop in its own Docker stack — same demo, just faster to show here."
 > "This is the real Twenty CRM, not a simulator. Seeded with 5
 > companies, 10 people, 3 opportunities by a Python script."
 
-**Back to CoCo dashboard.** **Flip driver toggle to `twenty`.**
+**Back to Coco dashboard.** **Flip driver toggle to `twenty`.**
 
 > "Now the same scenario runs against live Twenty. The provider reads
 > Twenty's REST — opportunity, tasks, stage — and builds a real `ui_state`.
@@ -133,7 +133,7 @@ bookmarklet to the bookmarks bar.
 
 **Switch to the Twenty tab. Click the bookmarklet.**
 
-- A small floating CoCo badge appears bottom-right.
+- A small floating Coco badge appears bottom-right.
 - Green dot — gateway reachable.
 - "Validate current page" button.
 
@@ -160,7 +160,7 @@ bookmarklet to the bookmarks bar.
 | "What if the gateway is down?" | SDK fails open by default, configurable. The audit table shows nothing was verdicted, so the gap is observable. |
 | "Latency?" | 3-6ms per verdict local, 20-40ms with Twenty REST. DSL is AST-evaluated in-process. |
 | "Who writes the packs?" | Product managers. YAML + a tiny expression DSL. No Python needed. |
-| "Why not just use OPA / Cedar?" | Both are great for API-layer decisions. Neither reads browser UI state. CoCo is the only layer that catches silent UI failures post-action. |
+| "Why not just use OPA / Cedar?" | Both are great for API-layer decisions. Neither reads browser UI state. Coco is the only layer that catches silent UI failures post-action. |
 | "How do I add a new pack?" | Drop a YAML into `data/<saas>/packs/`, restart. Packs are data, not code. |
 | "Can it replay?" | Audit table stores the full decision JSON. Yes. |
 

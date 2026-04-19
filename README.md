@@ -1,4 +1,4 @@
-# CoCo Trust Layer
+# Coco Trust Layer
 
 > Runtime governance between AI agents and Enterprise SaaS.
 > Validates every agent action against a YAML behavioral contract,
@@ -13,7 +13,7 @@
 
 ## Table of contents
 
-1. [What CoCo is](#1-what-coco-is)
+1. [What Coco is](#1-what-coco-is)
 2. [Why it exists](#2-why-it-exists)
 3. [Architecture at a glance](#3-architecture-at-a-glance)
 4. [5-minute quickstart (gateway only)](#4-5-minute-quickstart-gateway-only)
@@ -27,11 +27,11 @@
 
 ---
 
-## 1. What CoCo is
+## 1. What Coco is
 
-CoCo is a lightweight runtime that sits between an AI agent and the SaaS
+Coco is a lightweight runtime that sits between an AI agent and the SaaS
 applications it acts on. When the agent tries to mutate a record — move
-a deal stage, delete a contact, send a bulk email — CoCo validates the
+a deal stage, delete a contact, send a bulk email — Coco validates the
 request against a **YAML Action Pack** that spells out the business
 rules.
 
@@ -68,10 +68,10 @@ blast radius is large and the root cause is hard to trace.
 different stage enum, a different retention policy. Hard-coded guards
 turn into a maintenance nightmare; the people who know the rules (RevOps,
 Compliance, Legal) can't edit code. YAML packs let the right humans
-author the rules and CoCo enforces them without rebuilding the agent.
+author the rules and Coco enforces them without rebuilding the agent.
 
 **Why compile-time guards aren't enough.** The agent's plan is generated
-at runtime; static analysis sees a benign LLM call. CoCo intercepts the
+at runtime; static analysis sees a benign LLM call. Coco intercepts the
 HTTP mutation itself, checks live state at the moment of the action, and
 writes a receipt that ties agent → action → verdict → outcome.
 
@@ -79,7 +79,7 @@ writes a receipt that ties agent → action → verdict → outcome.
 
 ```
   ┌────────┐     ┌────────────┐     ┌────────────────┐
-  │ Agent  │────▶│  CoCo SDK  │────▶│  CoCo Gateway  │─┐
+  │ Agent  │────▶│  Coco SDK  │────▶│  Coco Gateway  │─┐
   └────────┘     └────────────┘     └────────────────┘ │
                                           │ POST /api/ │
                                           │  validate  │
@@ -201,7 +201,7 @@ passes. IDs land in `data/twenty/fixtures/seeded.json`.
 
 Click **Download extension (.zip)**, unzip, `chrome://extensions` →
 Developer mode → **Load unpacked** → pick the folder. Reload the
-Twenty tab — a floating CoCo pill appears bottom-right.
+Twenty tab — a floating Coco pill appears bottom-right.
 
 ### Step 6 — Run a live scenario (wizard step 6)
 
@@ -236,7 +236,7 @@ SDK into every matching Twenty tab.
 - On `http://localhost:3000/*` or `https://*.twenty.com/*`, the MAIN-world
   content script loads `bootstrap-config.js → coco-sdk.js → inject.js`
   at `document_idle`.
-- A floating **CoCo** pill renders bottom-right with health status and a
+- A floating **Coco** pill renders bottom-right with health status and a
   "Validate current page" button.
 - Click the extension toolbar icon to change the gateway URL, toggle the
   extension, or jump to the dashboard.

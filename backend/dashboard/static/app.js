@@ -1,4 +1,4 @@
-/* CoCo Trust Layer — dashboard frontend logic.
+/* Coco Trust Layer — dashboard frontend logic.
  *
  * Talks to the real gateway at same-origin endpoints:
  *   GET  /api/packs

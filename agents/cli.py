@@ -30,7 +30,7 @@ log = logging.getLogger("coco.agents.cli")
 
 
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Drive a CoCo scenario against live Twenty.")
+    p = argparse.ArgumentParser(description="Drive a Coco scenario against live Twenty.")
     p.add_argument("--scenario", required=True, help="Scenario ID (file stem under data/twenty/scenarios)")
     p.add_argument(
         "--twenty-url",

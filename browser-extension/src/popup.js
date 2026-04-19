@@ -1,4 +1,4 @@
-/* CoCo Trust Layer — popup script. */
+/* Coco Trust Layer — popup script. */
 (() => {
   "use strict";
 

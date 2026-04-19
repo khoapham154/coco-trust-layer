@@ -1,4 +1,4 @@
-/* CoCo Trust Layer — MAIN-world bootstrap.
+/* Coco Trust Layer — MAIN-world bootstrap.
  *
  * Runs BEFORE coco-sdk.js and inject.js as the first content script in
  * the manifest's MAIN-world list. Sets the two globals the SDK reads

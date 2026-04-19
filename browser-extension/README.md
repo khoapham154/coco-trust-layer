@@ -1,7 +1,7 @@
-# CoCo Browser Extension (Chromium MV3)
+# Coco Browser Extension (Chromium MV3)
 
-Auto-injects the CoCo SDK into matching Twenty CRM tabs, talking to a
-locally running CoCo gateway on `http://localhost:8080` by default.
+Auto-injects the Coco SDK into matching Twenty CRM tabs, talking to a
+locally running Coco gateway on `http://localhost:8080` by default.
 
 Replaces the old bookmarklet flow — install once, always on.
 
@@ -15,7 +15,7 @@ Replaces the old bookmarklet flow — install once, always on.
 4. Toggle **Developer mode** (top-right).
 5. Click **Load unpacked** and pick this folder (the one with
    `manifest.json`).
-6. Pin the CoCo icon in the toolbar. A green "ok" badge means the
+6. Pin the Coco icon in the toolbar. A green "ok" badge means the
    gateway is reachable.
 
 ## Use
@@ -38,7 +38,7 @@ Replaces the old bookmarklet flow — install once, always on.
    ```
 
 3. Open `http://localhost:3000`. The extension injects the SDK and a
-   floating CoCo badge appears bottom-right.
+   floating Coco badge appears bottom-right.
 4. Click the extension toolbar icon to toggle it off, change the
    gateway URL, or jump to the dashboard.
 

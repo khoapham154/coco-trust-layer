@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""End-to-end scenario runner for CoCo Trust Layer.
+"""End-to-end scenario runner for Coco Trust Layer.
 
 Iterates every JSON file in ``data/twenty/scenarios/`` and posts it to the
 gateway. By default it uses the in-process ASGI client (no server needed).
@@ -137,7 +137,7 @@ def _summary(passes: int, fails: int) -> int:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="CoCo scenario runner")
+    parser = argparse.ArgumentParser(description="Coco scenario runner")
     parser.add_argument(
         "--base-url",
         default=None,

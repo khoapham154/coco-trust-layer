@@ -1,4 +1,4 @@
-/* CoCo Trust Layer — options script. */
+/* Coco Trust Layer — options script. */
 (() => {
   "use strict";
 

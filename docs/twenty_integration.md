@@ -1,6 +1,6 @@
 # Twenty integration
 
-How to run the CoCo Trust Layer against a live Twenty CRM end-to-end.
+How to run the Coco Trust Layer against a live Twenty CRM end-to-end.
 
 ## 1. Start the gateway
 
@@ -50,8 +50,8 @@ Open the bookmarklet page:
 http://localhost:8080/dashboard#twenty
 ```
 
-— then drag the **CoCo → Twenty** link to your bookmarks bar. On a
-Twenty tab, click the bookmark: the CoCo SDK (`/sdk/coco-sdk.js`) and
+— then drag the **Coco → Twenty** link to your bookmarks bar. On a
+Twenty tab, click the bookmark: the Coco SDK (`/sdk/coco-sdk.js`) and
 injection bootstrap (`/sdk/inject.js`) load, a floating badge appears
 bottom-right, and every agent verdict renders as a toast.
 
@@ -91,7 +91,7 @@ run writes a row to the audit log at `data/runtime/audit.db`.
 | `TWENTY_API_KEY` not set | Generate a key in Twenty → Settings → Developers → API keys, then `export TWENTY_API_KEY=...`. |
 | `Twenty fetch failed` in the verdict trace | Twenty isn't reachable — `curl http://localhost:3000` to confirm. Re-run `bash scripts/setup_twenty.sh`. |
 | Bookmarklet does nothing | Twenty uses a strict Content-Security-Policy in some builds. Use the DevTools console snippet instead. |
-| No verdict toast after a mutation | Open DevTools → console → look for `[CoCo] SDK live against ...`. If absent, the SDK didn't attach. |
+| No verdict toast after a mutation | Open DevTools → console → look for `[Coco] SDK live against ...`. If absent, the SDK didn't attach. |
 
 ## What's wired where
 

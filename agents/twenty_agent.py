@@ -1,5 +1,5 @@
 """TwentyAgent — drives a live Twenty CRM via its REST API, validates
-every action through the CoCo Gateway, and only performs the mutation
+every action through the Coco Gateway, and only performs the mutation
 when the verdict is ALLOW. Every run is recorded in the audit log.
 
 Used in two places:
@@ -327,7 +327,7 @@ class TwentyAgent:
                         "/rest/activities",
                         json={
                             "type": "EMAIL",
-                            "title": scenario_state.get("email", {}).get("subject", "CoCo outreach"),
+                            "title": scenario_state.get("email", {}).get("subject", "Coco outreach"),
                             "authorId": scenario_state.get("email", {}).get("author_id"),
                             "personId": person_id,
                         },

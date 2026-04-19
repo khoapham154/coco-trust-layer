@@ -1,13 +1,13 @@
 /*!
- * CoCo Trust Layer SDK — vanilla JS, no dependencies.
+ * Coco Trust Layer SDK — vanilla JS, no dependencies.
  *
  * Embed in a SaaS frontend to capture UI state and validate agent actions
- * against the CoCo gateway before they run.
+ * against the Coco gateway before they run.
  *
  * Quick start:
- *   CoCo.init({ gatewayUrl: "http://localhost:8080", appId: "twenty" });
- *   const state = CoCo.captureState({ stage: "[data-testid='deal-stage']" });
- *   const verdict = await CoCo.validate(
+ *   Coco.init({ gatewayUrl: "http://localhost:8080", appId: "twenty" });
+ *   const state = Coco.captureState({ stage: "[data-testid='deal-stage']" });
+ *   const verdict = await Coco.validate(
  *     "move_stage", state, "twenty.deal_stage_move"
  *   );
  *   if (verdict.verdict === "BLOCK") alert(verdict.primary_reason);
@@ -15,13 +15,13 @@
 (function (global) {
   "use strict";
 
-  const CoCo = {
+  const Coco = {
     _config: null,
     _handlers: [],
 
     init(config) {
       if (!config || !config.gatewayUrl) {
-        throw new Error("CoCo.init: gatewayUrl is required");
+        throw new Error("Coco.init: gatewayUrl is required");
       }
       this._config = {
         gatewayUrl: String(config.gatewayUrl).replace(/\/$/, ""),
@@ -33,7 +33,7 @@
     /**
      * Read values from the DOM into a plain object suitable as ui_state input.
      * `selectors` is a flat `{ key: "cssSelector" }` map. For structured state,
-     * pass a nested object and CoCo will recurse.
+     * pass a nested object and Coco will recurse.
      */
     captureState(selectors) {
       if (!selectors) return {};
@@ -65,7 +65,7 @@
      */
     async validate(action, uiState, packId, phase) {
       if (!this._config) {
-        throw new Error("CoCo.validate: call CoCo.init first");
+        throw new Error("Coco.validate: call Coco.init first");
       }
       const body = {
         pack_id: packId,
@@ -80,11 +80,11 @@
       });
       if (!res.ok) {
         const text = await res.text();
-        throw new Error("CoCo gateway error " + res.status + ": " + text);
+        throw new Error("Coco gateway error " + res.status + ": " + text);
       }
       const decision = await res.json();
       for (const h of this._handlers) {
-        try { h(decision); } catch (e) { console.error("CoCo handler error", e); }
+        try { h(decision); } catch (e) { console.error("Coco handler error", e); }
       }
       return decision;
     },
@@ -104,8 +104,8 @@
   };
 
   if (typeof module !== "undefined" && module.exports) {
-    module.exports = CoCo;
+    module.exports = Coco;
   } else {
-    global.CoCo = CoCo;
+    global.Coco = Coco;
   }
 })(typeof window !== "undefined" ? window : globalThis);

@@ -1,7 +1,7 @@
-# CoCo SDK
+# Coco SDK
 
 Vanilla JS, no dependencies, one file. Embed in a SaaS frontend to capture
-UI state and validate agent actions against the CoCo gateway before they
+UI state and validate agent actions against the Coco gateway before they
 run.
 
 ## Quick start
@@ -9,13 +9,13 @@ run.
 ```html
 <script src="/path/to/coco-sdk.js"></script>
 <script>
-  CoCo.init({ gatewayUrl: "http://localhost:8080", appId: "twenty" });
+  Coco.init({ gatewayUrl: "http://localhost:8080", appId: "twenty" });
 
   // On each agent action, capture state and ask the gateway:
   async function onAgentMoveDealStage(targetStage) {
     const state = {
       deal: {
-        owner: CoCo.captureState({ x: "[data-testid='deal-owner']" }).x,
+        owner: Coco.captureState({ x: "[data-testid='deal-owner']" }).x,
         amount: Number(document.querySelector("[data-testid='deal-amount']").dataset.cocoValue),
         target_stage: targetStage,
         prev_stage_tasks_completed: true,
@@ -24,7 +24,7 @@ run.
       },
       user: { role: "sales" },
     };
-    const decision = await CoCo.validate(
+    const decision = await Coco.validate(
       "move_stage",
       state,
       "twenty.deal_stage_move",
@@ -41,17 +41,17 @@ run.
 
 ## API
 
-### `CoCo.init({ gatewayUrl, appId? })`
+### `Coco.init({ gatewayUrl, appId? })`
 Set the gateway URL and app identifier. Must be called before `validate`.
 
-### `CoCo.captureState(selectors)`
+### `Coco.captureState(selectors)`
 Read DOM values into a plain object. Selectors are CSS selectors; values
 come from `[data-coco-value]`, `el.value`, or `el.textContent` in that
 order.
 
 Nested selector objects produce nested state:
 ```js
-CoCo.captureState({
+Coco.captureState({
   deal: {
     owner: "[data-testid='owner']",
     amount: "[data-testid='amount']"
@@ -59,7 +59,7 @@ CoCo.captureState({
 });
 ```
 
-### `CoCo.validate(action, uiState, packId, phase?)`
+### `Coco.validate(action, uiState, packId, phase?)`
 POST to `${gatewayUrl}/api/validate`. Returns the full decision:
 ```js
 {
@@ -72,11 +72,11 @@ POST to `${gatewayUrl}/api/validate`. Returns the full decision:
 ```
 Throws on HTTP error.
 
-### `CoCo.onVerdict(cb)`
+### `Coco.onVerdict(cb)`
 Register a callback fired on every verdict (useful for logging or a
 global "blocked" banner).
 
-### `CoCo.reset()`
+### `Coco.reset()`
 Clear config + handlers. Intended for tests.
 
 ## Smoke test
@@ -93,6 +93,6 @@ badge.
 
 ## Integration points
 
-In a SaaS frontend, wire `CoCo.validate(...)` into the click handler
+In a SaaS frontend, wire `Coco.validate(...)` into the click handler
 for any agent-initiated action. When the verdict is not `ALLOW`, show the
 `primary_reason` to the user and return early.

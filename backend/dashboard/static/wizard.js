@@ -1,4 +1,4 @@
-/* CoCo Trust Layer — Twenty onboarding wizard.
+/* Coco Trust Layer — Twenty onboarding wizard.
  *
  * Renders a six-step state machine inside #wizard on the dashboard.
  * Each step owns (a) a render() that draws the pane body and (b) a
@@ -176,7 +176,7 @@
         h(
           "p",
           { class: "lede-sm" },
-          "Check that the CoCo gateway is up, packs are loaded, and the audit DB is writable before you bring Twenty online.",
+          "Check that the Coco gateway is up, packs are loaded, and the audit DB is writable before you bring Twenty online.",
         ),
       );
       const actions = h("div", { class: "wizard-actions" });
@@ -409,12 +409,12 @@
     },
 
     render_extension(pane) {
-      pane.appendChild(h("h3", {}, "Install the CoCo browser extension"));
+      pane.appendChild(h("h3", {}, "Install the Coco browser extension"));
       pane.appendChild(
         h(
           "p",
           { class: "lede-sm" },
-          "The extension auto-injects the CoCo SDK into your Twenty tab and renders a floating verdict badge. Install it once, then the SDK follows you across sessions.",
+          "The extension auto-injects the Coco SDK into your Twenty tab and renders a floating verdict badge. Install it once, then the SDK follows you across sessions.",
         ),
       );
 
@@ -466,8 +466,8 @@
             h("li", {}, "Open chrome://extensions in Chrome or Edge."),
             h("li", {}, "Toggle Developer mode (top right)."),
             h("li", {}, "Click Load unpacked → pick the browser-extension/ folder."),
-            h("li", {}, `Click the CoCo extension icon → gateway URL is ${GATEWAY_ORIGIN}.`),
-            h("li", {}, `Open ${state.twentyUrl} → the floating CoCo badge appears bottom-right.`),
+            h("li", {}, `Click the Coco extension icon → gateway URL is ${GATEWAY_ORIGIN}.`),
+            h("li", {}, `Open ${state.twentyUrl} → the floating Coco badge appears bottom-right.`),
           ]),
         ]),
       );

@@ -1,4 +1,4 @@
-/* CoCo Trust Layer — MV3 service worker.
+/* Coco Trust Layer — MV3 service worker.
  *
  * Responsibilities:
  *   1. Own the gateway URL / enabled / appId settings (chrome.storage.sync).

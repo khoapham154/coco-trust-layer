@@ -25,7 +25,7 @@ def test_dashboard_html_renders(client):
     assert r.status_code == 200
     assert "text/html" in r.headers["content-type"]
     body = r.text
-    assert "CoCo Trust Layer" in body
+    assert "Coco Trust Layer" in body
     assert "/static/app.js" in body
     assert "/static/styles.css" in body
 
@@ -43,7 +43,7 @@ def test_static_assets_served(client):
 def test_sdk_served(client):
     r = client.get("/sdk/coco-sdk.js")
     assert r.status_code == 200
-    assert "CoCo" in r.text
+    assert "Coco" in r.text
     assert "application/javascript" in r.headers["content-type"]
 
 

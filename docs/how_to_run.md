@@ -1,4 +1,4 @@
-# How to run the CoCo Trust Layer
+# How to run the Coco Trust Layer
 
 Three paths here: local dev (conda), Docker, and live Twenty CRM
 end-to-end. See `docs/twenty_integration.md` for the Twenty-specific
@@ -124,7 +124,7 @@ fixture → engine → verdict) and Twenty mode (live Twenty state → agent →
 gateway → verdict → real PATCH if ALLOW). Both write to the same audit
 log and update the verdict panel with per-check pass/fail.
 
-To inject CoCo into the running Twenty tab itself, open
+To inject Coco into the running Twenty tab itself, open
 `scripts/inject_bookmarklet.html` in a browser and drag the bookmarklet
 to your bookmarks bar. See `docs/twenty_integration.md`.
 

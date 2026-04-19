@@ -1,5 +1,5 @@
 /*!
- * CoCo Trust Layer — Twenty injection bootstrap.
+ * Coco Trust Layer — Twenty injection bootstrap.
  *
  * Auto-loaded into a Twenty browser tab via the bookmarklet at
  * /static/inject_bookmarklet.html (or via a userscript manager).
@@ -7,9 +7,9 @@
  * them in order.
  *
  * What it does when it runs inside Twenty:
- *   1. Calls `CoCo.init` with the gateway URL this file was served
+ *   1. Calls `Coco.init` with the gateway URL this file was served
  *      from (same origin as the SDK — no CORS config needed).
- *   2. Draws a small floating CoCo badge (bottom-right) showing the
+ *   2. Draws a small floating Coco badge (bottom-right) showing the
  *      gateway status + a "Validate current page" button.
  *   3. Renders a toast on every verdict the SDK observes.
  *
@@ -20,7 +20,7 @@
   "use strict";
 
   if (window.__COCO_INJECTED__) {
-    console.info("[CoCo] already injected — skipping");
+    console.info("[Coco] already injected — skipping");
     return;
   }
   window.__COCO_INJECTED__ = true;
@@ -44,12 +44,12 @@
 
   function waitForSdk(cb, attempts) {
     attempts = attempts || 0;
-    if (window.CoCo && typeof window.CoCo.init === "function") {
+    if (window.Coco && typeof window.Coco.init === "function") {
       cb();
       return;
     }
     if (attempts > 50) {
-      console.error("[CoCo] SDK never appeared — inject failed");
+      console.error("[Coco] SDK never appeared — inject failed");
       return;
     }
     setTimeout(() => waitForSdk(cb, attempts + 1), 100);
@@ -137,7 +137,7 @@
     badge.className = "coco-badge";
     badge.innerHTML = `
       <div class="coco-badge-head">
-        <span class="coco-badge-brand">CoCo</span>
+        <span class="coco-badge-brand">Coco</span>
         <span class="coco-badge-dot" id="coco-injected-dot" data-status="unknown"></span>
       </div>
       <div class="coco-badge-meta" id="coco-injected-meta">Connecting to ${gatewayUrl}…</div>
@@ -168,7 +168,7 @@
   function guessPackAndState() {
     // Best-effort: look at the current Twenty route to decide what
     // pack + ui_state to validate against. Users can always run
-    // a specific scenario from the CoCo dashboard instead.
+    // a specific scenario from the Coco dashboard instead.
     const path = location.pathname;
     if (/\/objects\/opportunities/.test(path)) {
       const stageEl = document.querySelector('[data-testid="record-detail-stage"]')
@@ -221,8 +221,8 @@
 
   function validateCurrentPage(gatewayUrl) {
     const guess = guessPackAndState();
-    window.CoCo.validate(guess.action, guess.uiState, guess.packId, "pre").catch((err) => {
-      showToast("BLOCK", "CoCo validate failed: " + err.message);
+    window.Coco.validate(guess.action, guess.uiState, guess.packId, "pre").catch((err) => {
+      showToast("BLOCK", "Coco validate failed: " + err.message);
     });
   }
 
@@ -240,7 +240,7 @@
   }
 
   function bindHandlers() {
-    window.CoCo.onVerdict((decision) => {
+    window.Coco.onVerdict((decision) => {
       showToast(decision.verdict, decision.primary_reason || decision.pack_id);
     });
   }
@@ -250,15 +250,15 @@
     window.__COCO_GATEWAY_URL = gatewayUrl;
     waitForSdk(() => {
       try {
-        window.CoCo.init({ gatewayUrl: gatewayUrl, appId: "twenty" });
+        window.Coco.init({ gatewayUrl: gatewayUrl, appId: "twenty" });
       } catch (err) {
-        console.error("[CoCo] init failed:", err);
+        console.error("[Coco] init failed:", err);
         return;
       }
       injectStyles();
       renderBadge(gatewayUrl);
       bindHandlers();
-      console.info("[CoCo] SDK live against", gatewayUrl);
+      console.info("[Coco] SDK live against", gatewayUrl);
     });
   }
 

@@ -1,4 +1,4 @@
-"""CoCo Trust Layer — gateway engine.
+"""Coco Trust Layer — gateway engine.
 
 Runtime validation of AI agent actions against behavioral contracts
 defined as Agent Action Packs (YAML). Deterministic, <50ms per request,

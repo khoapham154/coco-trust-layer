@@ -1,8 +1,8 @@
-# CoCo Trust Layer — Architecture
+# Coco Trust Layer — Architecture
 
 ## What it is
 
-CoCo is the Trust Layer between AI agents and Enterprise SaaS. It enforces
+Coco is the Trust Layer between AI agents and Enterprise SaaS. It enforces
 behavioral contracts (Action Packs) at runtime, before an agent touches
 the SaaS, and catches silent failures after the action by comparing the
 observed UI state against post-conditions.
@@ -18,7 +18,7 @@ observed UI state against post-conditions.
 ## Request flow
 
 ```
-Agent ──► CoCo SDK ──► Gateway ──┬─► Pre-conditions  ─┐
+Agent ──► Coco SDK ──► Gateway ──┬─► Pre-conditions  ─┐
 (N8N,    (embedded    (FastAPI)  ├─► Constraints       ├─► Verdict
  Zapier,  in SaaS                └─► Post-conditions  ─┘   (ALLOW/BLOCK/
  custom)  frontend)                                        ESCALATE)
@@ -45,7 +45,7 @@ actual CRM state rather than a fixture:
                               /api/audit                  │      ?driver=engine|twenty
                                        │                  ▼
 ┌──────────────────────────────────────────────────────────────────────────┐
-│  CoCo Gateway (FastAPI :8080)                                            │
+│  Coco Gateway (FastAPI :8080)                                            │
 │                                                                          │
 │  routes/validate    ◄───── agent HTTP POST (sync httpx, threadpooled)    │
 │  routes/scenarios   ─────► agents.TwentyAgent.run(id)                    │
@@ -63,7 +63,7 @@ actual CRM state rather than a fixture:
 │  /rest/opportunities, /rest/people, /rest/companies, /rest/tasks         │
 └──────────────────────────────────────▲───────────────────────────────────┘
                                        │
-                                       │  Bookmarklet injects CoCo SDK into
+                                       │  Bookmarklet injects Coco SDK into
                                        │  the live Twenty tab (inject.js)
                                        │
                                   User's browser
