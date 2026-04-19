@@ -81,8 +81,14 @@ Clear config + handlers. Intended for tests.
 
 ## Smoke test
 
-Open `example.html` in a browser, set the gateway URL, pick a pack, edit
-the JSON state, click Validate. The verdict renders below with colored
+```bash
+cd frontend
+python -m http.server 8000
+# open http://localhost:8000/ in a browser
+```
+
+Set the gateway URL (default `http://localhost:8080`), pick a pack, edit
+the JSON state, click Validate. The verdict renders below with a colored
 badge.
 
 ## Integration points
