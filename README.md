@@ -22,8 +22,7 @@
 7. [The five Twenty Action Packs](#7-the-five-twenty-action-packs)
 8. [Testing](#8-testing)
 11. [Repo layout](#11-repo-layout)
-12. [Contributing](#12-contributing)
-13. [License](#13-license)
+12. [License](#12-license)
 
 ---
 
@@ -304,21 +303,7 @@ coco-trust-layer/
 └── README.md            (this file)
 ```
 
-## 12. Contributing
-
-Only Khoa Pham commits to `main` today. PRs welcome from invited
-collaborators — open an issue first so we can align scope.
-
-Project conventions live in [`CLAUDE.md`](CLAUDE.md); read that before
-sending a PR. Key points:
-- Python 3.10+, type hints on signatures, `logging` (not `print`).
-- All long-running commands go in `tmux`.
-- DSL in packs stays AST-safe — no `import`, no function calls, no
-  list comprehensions.
-- Never push to `main` without the 45-test suite + 19-scenario
-  regression green.
-
-## 13. License
+## 12. License
 
 MIT — see [LICENSE](LICENSE).
 
