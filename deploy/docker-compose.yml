@@ -1,18 +1,49 @@
+# CoCo Trust Layer — production-shape compose.
+#
+# Brings up the gateway (FastAPI + dashboard + SDK delivery) and a
+# Redis instance (reserved for queue work in later phases). Run with:
+#
+#     docker compose -f deploy/docker-compose.yml up --build -d
+#
+# Twenty CRM runs in its OWN compose stack, cloned by
+# scripts/setup_twenty.sh. The two stacks are intentionally decoupled:
+# the gateway can boot without Twenty; when Twenty is reachable at
+# localhost:3000, the dashboard's driver=twenty toggle lights up. See
+# the x-twenty anchor at the bottom of this file for the command to
+# run alongside this one.
+
+x-twenty-stack: &twenty-stack
+  description: |
+    Twenty CRM compose lives under twenty/packages/twenty-docker/docker-compose.yml
+    after scripts/setup_twenty.sh clones it.
+
+    Start:  docker compose -f twenty/packages/twenty-docker/docker-compose.yml up -d
+    Stop:   docker compose -f twenty/packages/twenty-docker/docker-compose.yml down
+    URL:    http://localhost:3000
+
 services:
   coco-gateway:
     build:
-      context: ../backend
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: backend/Dockerfile
     container_name: coco-gateway
     ports:
       - "8080:8080"
     volumes:
       - ../data/twenty/packs:/app/packs/twenty/packs:ro
+      - ../data/twenty/scenarios:/app/backend/../data/twenty/scenarios:ro
+      - ../data/twenty/fixtures:/app/data-fixtures:ro
       - ../data/runtime:/app/data
     environment:
       COCO_PACK_DIR: /app/packs/twenty/packs
       COCO_DB_PATH: /app/data/audit.db
       COCO_PORT: "8080"
+      # When the gateway runs in Docker and Twenty runs on the host's
+      # localhost, use host.docker.internal. Override per-environment
+      # by passing `-e TWENTY_BASE_URL=...`.
+      TWENTY_BASE_URL: http://host.docker.internal:3000
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     healthcheck:
       test:
         - CMD

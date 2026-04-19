@@ -4,15 +4,24 @@ from __future__ import annotations
 
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any, Dict
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from config import settings
 from db import AuditLog
 from engine import AgentActionPack, GatewayEngine
-from routes import audit_router, packs_router, validate_router
+from routes import (
+    audit_router,
+    dashboard_router,
+    packs_router,
+    scenarios_router,
+    twenty_ops_router,
+    validate_router,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger("coco.gateway")
@@ -51,6 +60,15 @@ app.add_middleware(
 app.include_router(validate_router)
 app.include_router(packs_router)
 app.include_router(audit_router)
+app.include_router(scenarios_router)
+app.include_router(twenty_ops_router)
+app.include_router(dashboard_router)
+
+_STATIC_DIR = Path(__file__).resolve().parent / "dashboard" / "static"
+if _STATIC_DIR.exists():
+    app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
+else:  # pragma: no cover - only hit if the dashboard assets are missing
+    log.warning("Dashboard static dir missing: %s", _STATIC_DIR)
 
 
 @app.get("/health")
@@ -69,6 +87,10 @@ async def root() -> Dict[str, Any]:
             "GET /api/packs",
             "GET /api/packs/{pack_id}",
             "GET /api/audit",
+            "GET /api/scenarios",
+            "POST /api/scenarios/{id}/run",
+            "GET /dashboard",
+            "GET /sdk/coco-sdk.js",
             "GET /health",
         ],
     }
