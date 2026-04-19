@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>CoCo Trust Layer — Settings</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body class="options">
+    <header class="options-header">
+      <div class="brand-mark">CoCo</div>
+      <div>
+        <h1>Trust Layer settings</h1>
+        <p>Configure the gateway the extension should talk to and which hosts get the SDK injected.</p>
+      </div>
+    </header>
+
+    <section class="field">
+      <label for="gateway-url">Gateway URL</label>
+      <input id="gateway-url" type="url" placeholder="http://localhost:8080" />
+      <p class="field-help">Base URL of the CoCo gateway. The extension fetches <code>/sdk/coco-sdk.js</code> and <code>/sdk/inject.js</code> from here and reports health.</p>
+    </section>
+
+    <section class="field">
+      <label for="app-id">App ID</label>
+      <input id="app-id" type="text" placeholder="twenty" />
+      <p class="field-help">Identifier stamped on every validate request. Keep as <code>twenty</code> for the Twenty CRM integration.</p>
+    </section>
+
+    <section class="field">
+      <label>Enabled hosts</label>
+      <ul class="host-list" id="host-list"></ul>
+      <p class="field-help">Edit <code>manifest.json</code> <code>host_permissions</code> to add more hosts. Chrome requires a reload after manifest changes.</p>
+    </section>
+
+    <footer class="options-actions">
+      <button id="save" class="btn btn-primary">Save</button>
+      <span id="save-status" class="save-status"></span>
+    </footer>
+
+    <script src="options.js"></script>
+  </body>
+</html>
