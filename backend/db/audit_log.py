@@ -94,3 +94,16 @@ class AuditLog:
         with self._lock, self._connect() as conn:
             row = conn.execute("SELECT COUNT(*) AS n FROM audit_log").fetchone()
         return int(row["n"]) if row else 0
+
+    def delete_since(self, timestamp_iso: str) -> int:
+        """Delete audit rows whose timestamp >= the given ISO timestamp.
+
+        Used by the demo reset endpoint to clear the audit window between
+        takes. Returns the number of rows deleted.
+        """
+        with self._lock, self._connect() as conn:
+            cur = conn.execute(
+                "DELETE FROM audit_log WHERE timestamp >= ?",
+                (timestamp_iso,),
+            )
+            return int(cur.rowcount or 0)

@@ -17,6 +17,7 @@ from engine import AgentActionPack, GatewayEngine
 from routes import (
     audit_router,
     dashboard_router,
+    demo_router,
     packs_router,
     scenarios_router,
     twenty_ops_router,
@@ -62,6 +63,7 @@ app.include_router(packs_router)
 app.include_router(audit_router)
 app.include_router(scenarios_router)
 app.include_router(twenty_ops_router)
+app.include_router(demo_router)
 app.include_router(dashboard_router)
 
 _STATIC_DIR = Path(__file__).resolve().parent / "dashboard" / "static"
@@ -89,6 +91,10 @@ async def root() -> Dict[str, Any]:
             "GET /api/audit",
             "GET /api/scenarios",
             "POST /api/scenarios/{id}/run",
+            "GET /api/demo/state",
+            "POST /api/demo/reset",
+            "POST /api/demo/agent-runs",
+            "POST /api/demo/escalate",
             "GET /dashboard",
             "GET /sdk/coco-sdk.js",
             "GET /health",

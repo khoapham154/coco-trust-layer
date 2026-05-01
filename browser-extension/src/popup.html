@@ -10,7 +10,7 @@
       <div class="brand-mark">Coco</div>
       <div>
         <div class="brand-title">Trust Layer</div>
-        <div class="brand-sub" id="popup-version">v0.1.0</div>
+        <div class="brand-sub" id="popup-version">v0.3.0</div>
       </div>
     </header>
 
@@ -22,32 +22,76 @@
       <span class="packs-loaded" id="packs-loaded"></span>
     </div>
 
-    <section class="field">
-      <label for="gateway-url">Gateway URL</label>
-      <input id="gateway-url" type="url" placeholder="http://localhost:8080" />
+    <nav class="tabs" role="tablist">
+      <button class="tab active" data-tab="demo" role="tab" type="button">Demo</button>
+      <button class="tab" data-tab="settings" role="tab" type="button">Settings</button>
+    </nav>
+
+    <section class="tab-panel active" id="tab-demo">
+      <div class="demo-headline" id="demo-status-line">Checking demo gateway…</div>
+
+      <div class="demo-deal">
+        <div class="demo-deal-label">Hero deal</div>
+        <div class="demo-deal-stage" id="demo-deal-stage">—</div>
+      </div>
+
+      <div class="demo-actions">
+        <button class="demo-btn demo-btn-danger" id="btn-no-coco" type="button">
+          <span class="demo-btn-icon">🚨</span>
+          <span class="demo-btn-body">
+            <strong>Run agent · WITHOUT Coco</strong>
+            <small>Stage skip lands in Twenty. No audit row.</small>
+          </span>
+        </button>
+
+        <button class="demo-btn demo-btn-shield" id="btn-with-coco" type="button">
+          <span class="demo-btn-icon">🛡️</span>
+          <span class="demo-btn-body">
+            <strong>Run agent · WITH Coco</strong>
+            <small>Validate first. Block on rule fail.</small>
+          </span>
+        </button>
+
+        <button class="demo-btn demo-btn-reset" id="btn-reset" type="button">
+          <span class="demo-btn-icon">↺</span>
+          <span class="demo-btn-body">
+            <strong>Reset demo</strong>
+            <small>Stage → NEW. Wipe last 10 min audit rows.</small>
+          </span>
+        </button>
+      </div>
+
+      <div class="demo-log" id="demo-log" aria-live="polite"></div>
     </section>
 
-    <section class="field">
-      <label for="app-id">App ID</label>
-      <input id="app-id" type="text" placeholder="twenty" />
+    <section class="tab-panel" id="tab-settings">
+      <div class="field">
+        <label for="gateway-url">Gateway URL</label>
+        <input id="gateway-url" type="url" placeholder="http://localhost:8080" />
+      </div>
+
+      <div class="field">
+        <label for="app-id">App ID</label>
+        <input id="app-id" type="text" placeholder="twenty" />
+      </div>
+
+      <div class="toggle-row">
+        <label class="toggle">
+          <input id="enabled" type="checkbox" />
+          <span>Enabled on Twenty tabs</span>
+        </label>
+      </div>
+
+      <footer class="popup-actions">
+        <button id="save" class="btn btn-primary" type="button">Save</button>
+        <button id="refresh" class="btn btn-ghost" type="button">Recheck</button>
+        <a id="open-dashboard" class="btn btn-ghost" href="#" target="_blank">Dashboard</a>
+      </footer>
+
+      <div class="popup-footnote">
+        The SDK is injected fresh on every tab load from the gateway above.
+      </div>
     </section>
-
-    <section class="toggle-row">
-      <label class="toggle">
-        <input id="enabled" type="checkbox" />
-        <span>Enabled on Twenty tabs</span>
-      </label>
-    </section>
-
-    <footer class="popup-actions">
-      <button id="save" class="btn btn-primary">Save</button>
-      <button id="refresh" class="btn btn-ghost">Recheck</button>
-      <a id="open-dashboard" class="btn btn-ghost" href="#" target="_blank">Dashboard</a>
-    </footer>
-
-    <div class="popup-footnote" id="popup-footnote">
-      The SDK is injected fresh on every tab load from the gateway above.
-    </div>
 
     <script src="popup.js"></script>
   </body>

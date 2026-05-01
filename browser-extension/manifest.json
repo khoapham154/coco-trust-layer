@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
   "name": "Coco Trust Layer",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Auto-inject the Coco SDK into your Twenty CRM tab so every agent action is validated against a live gateway.",
-  "permissions": ["storage"],
+  "permissions": ["storage", "scripting", "tabs", "activeTab"],
   "host_permissions": [
     "http://localhost:3000/*",
     "http://127.0.0.1:3000/*",

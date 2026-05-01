@@ -146,6 +146,43 @@ class TwentyAgent:
             "mutation_error": mutation_error,
         }
 
+    def mutate_only(self, scenario_id: str) -> Dict[str, Any]:
+        """Perform the scenario's mutation against Twenty WITHOUT validating
+        through Coco. Used by the demo control surface to show the delta
+        between governed and ungoverned agent behaviour. No audit row is
+        written because the gateway never sees this call."""
+        scenario = self._load_scenario(scenario_id)
+        fixtures = self._load_fixtures()
+
+        try:
+            ui_state = self._build_live_state(scenario, fixtures)
+        except httpx.HTTPError as exc:
+            return {
+                "driver": "twenty_no_coco",
+                "scenario_id": scenario_id,
+                "error": f"Twenty fetch failed: {exc}",
+                "decision": None,
+                "twenty_response": None,
+            }
+
+        twenty_response: Optional[Dict[str, Any]] = None
+        mutation_error: Optional[str] = None
+        try:
+            twenty_response = self._apply(scenario, fixtures)
+        except httpx.HTTPError as exc:
+            mutation_error = f"Twenty mutation failed: {exc}"
+            log.warning(mutation_error)
+
+        return {
+            "driver": "twenty_no_coco",
+            "scenario_id": scenario_id,
+            "pack_id": scenario["pack_id"],
+            "ui_state": ui_state,
+            "decision": None,
+            "twenty_response": twenty_response,
+            "mutation_error": mutation_error,
+        }
+
     # --- internals --------------------------------------------------
 
     def _load_scenario(self, scenario_id: str) -> Dict[str, Any]:
