@@ -30,6 +30,7 @@ router = APIRouter(prefix="/api/demo", tags=["demo"])
 DEMO_DEAL_NAME = "Northwind Labs — Enterprise Trust Layer"
 DEMO_DEAL_CLEAN_STAGE = "NEW"
 DEMO_SCENARIO_DEFAULT = "deal_stage_move_block_skip_stage"
+DEMO_OWNER_EMAIL = "ada@northwind.test"
 
 
 def _check_demo_enabled() -> None:
@@ -126,8 +127,10 @@ async def demo_reset(body: ResetBody, request: Request) -> Dict[str, Any]:
 
     fixtures = _fixtures()
     deal_id = fixtures.get("opportunities", {}).get(DEMO_DEAL_NAME)
+    owner_id = fixtures.get("people", {}).get(DEMO_OWNER_EMAIL)
 
     deal_reset = False
+    owner_set = False
     twenty_error: Optional[str] = None
     if deal_id:
         try:
@@ -139,12 +142,18 @@ async def demo_reset(body: ResetBody, request: Request) -> Dict[str, Any]:
                 },
                 timeout=15.0,
             ) as client:
+                # Reset stage AND ensure owner is assigned. Both fields in
+                # one PATCH so the deal is always demo-ready.
+                patch_body: Dict[str, Any] = {"stage": DEMO_DEAL_CLEAN_STAGE}
+                if owner_id:
+                    patch_body["pointOfContactId"] = owner_id
                 resp = await client.patch(
                     f"/rest/opportunities/{deal_id}",
-                    json={"stage": DEMO_DEAL_CLEAN_STAGE},
+                    json=patch_body,
                 )
                 resp.raise_for_status()
                 deal_reset = True
+                owner_set = bool(owner_id)
         except httpx.HTTPError as exc:
             twenty_error = f"Twenty reset failed: {exc}"
             log.warning(twenty_error)
@@ -166,6 +175,8 @@ async def demo_reset(body: ResetBody, request: Request) -> Dict[str, Any]:
         "deal_name": DEMO_DEAL_NAME,
         "deal_reset": deal_reset,
         "deal_stage": DEMO_DEAL_CLEAN_STAGE if deal_reset else None,
+        "owner_set": owner_set,
+        "owner_email": DEMO_OWNER_EMAIL if owner_set else None,
         "audit_cleared": audit_cleared,
         "twenty_error": twenty_error,
     }
@@ -214,6 +225,7 @@ async def demo_agent_run(body: AgentRunBody, request: Request) -> Dict[str, Any]
             decision_id = recent[0]["id"]
 
     decision = result.get("decision")
+    engine = getattr(request.app.state, "engine", None)
     return {
         "scenario_id": body.scenario_id,
         "with_coco": body.with_coco,
@@ -225,7 +237,58 @@ async def demo_agent_run(body: AgentRunBody, request: Request) -> Dict[str, Any]
         "twenty_response": result.get("twenty_response"),
         "mutation_error": result.get("mutation_error"),
         "error": result.get("error"),
+        "action_summary": _summarise_attempt(result, body.scenario_id, engine, decision),
     }
+
+
+def _failing_rule_expression(engine: Any, pack_id: str, check_id: str) -> Optional[str]:
+    """Look up the YAML expression of the failing constraint."""
+    if engine is None or not pack_id or not check_id:
+        return None
+    pack = getattr(engine, "packs", {}).get(pack_id)
+    if pack is None:
+        return None
+    for c in getattr(pack, "constraints", []):
+        if c.id == check_id:
+            return c.rule
+    return None
+
+
+def _summarise_attempt(
+    result: Dict[str, Any],
+    scenario_id: str,
+    engine: Any = None,
+    decision: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Build a partner-friendly summary of what the agent tried to do.
+
+    Surfaces the deal name, current stage, attempted target stage, the
+    requested action, and the failing rule expression (if any) so the
+    verdict card can render plain English to a non-technical viewer.
+    """
+    state = result.get("ui_state") or {}
+    deal = state.get("deal") or {}
+    summary: Dict[str, Any] = {
+        "deal_name": DEMO_DEAL_NAME,
+        "current_stage": (deal.get("current_stage") or DEMO_DEAL_CLEAN_STAGE).upper(),
+        "target_stage": (deal.get("target_stage") or "").upper(),
+        "amount": deal.get("amount"),
+        "scenario_id": scenario_id,
+        "intent": (
+            f"Move stage {(deal.get('current_stage') or DEMO_DEAL_CLEAN_STAGE).upper()} "
+            f"→ {(deal.get('target_stage') or '?').upper()}"
+        ),
+    }
+    if decision and decision.get("checks"):
+        failing = next((c for c in decision["checks"] if not c.get("passed")), None)
+        if failing:
+            summary["failing_check_kind"] = failing.get("kind")
+            summary["failing_check_id"] = failing.get("check_id")
+            if failing.get("kind") == "constraint":
+                expr = _failing_rule_expression(engine, result.get("pack_id"), failing.get("check_id"))
+                if expr:
+                    summary["failing_rule_expression"] = expr
+    return summary
 
 
 @router.post("/escalate")
