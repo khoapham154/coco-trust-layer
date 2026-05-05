@@ -21,8 +21,8 @@
 6. [Chromium browser extension](#6-chromium-browser-extension)
 7. [The five Twenty Action Packs](#7-the-five-twenty-action-packs)
 8. [Testing](#8-testing)
-11. [Repo layout](#11-repo-layout)
-12. [License](#12-license)
+9. [Repo layout](#9-repo-layout)
+10. [License](#10-license)
 
 ---
 
@@ -278,7 +278,7 @@ bash scripts/smoke_e2e.sh                               # gateway end-to-end
 the same 19 scenarios against a live gateway container instead of
 in-process.
 
-## 11. Repo layout
+## 9. Repo layout
 
 ```
 coco-trust-layer/
@@ -303,7 +303,7 @@ coco-trust-layer/
 └── README.md            (this file)
 ```
 
-## 12. License
+## 10. License
 
 MIT — see [LICENSE](LICENSE).
 
