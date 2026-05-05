@@ -4,7 +4,25 @@
 
   const $ = (id) => document.getElementById(id);
 
-  let currentSettings = null;
+  // Pre-populated so demo buttons work even if the user clicks before
+  // chrome.storage round-trips (race we saw in 0.3.0).
+  let currentSettings = {
+    gatewayUrl: "http://localhost:8080",
+    appId: "twenty",
+    enabled: true,
+  };
+
+  async function ensureSettings() {
+    try {
+      const resp = await sendMsg({ type: "coco:getState" });
+      if (resp && resp.settings && resp.settings.gatewayUrl) {
+        currentSettings = resp.settings;
+      }
+    } catch (_) {
+      /* keep defaults */
+    }
+    return currentSettings;
+  }
 
   // --- status pill ---------------------------------------------------
 
@@ -43,12 +61,25 @@
   }
 
   async function load() {
-    const { settings, lastHealth } = await sendMsg({ type: "coco:getState" });
-    currentSettings = settings;
-    $("gateway-url").value = settings.gatewayUrl;
-    $("app-id").value = settings.appId;
-    $("enabled").checked = !!settings.enabled;
-    $("open-dashboard").href = `${settings.gatewayUrl.replace(/\/$/, "")}/dashboard`;
+    let settings = null;
+    let lastHealth = null;
+    try {
+      const resp = await sendMsg({ type: "coco:getState" });
+      if (resp) {
+        settings = resp.settings || null;
+        lastHealth = resp.lastHealth || null;
+      }
+    } catch (err) {
+      console.warn("[Coco popup] coco:getState failed:", err);
+    }
+    if (settings && settings.gatewayUrl) {
+      currentSettings = settings;
+    }
+    // currentSettings is always a non-null object (initialised at module top).
+    $("gateway-url").value = currentSettings.gatewayUrl || "http://localhost:8080";
+    $("app-id").value = currentSettings.appId || "twenty";
+    $("enabled").checked = !!currentSettings.enabled;
+    $("open-dashboard").href = `${(currentSettings.gatewayUrl || "http://localhost:8080").replace(/\/$/, "")}/dashboard`;
     paintStatus(lastHealth);
     refreshDemoState();
   }
@@ -108,8 +139,8 @@
   }
 
   async function refreshDemoState() {
-    if (!currentSettings) return;
-    const url = `${currentSettings.gatewayUrl.replace(/\/$/, "")}/api/demo/state`;
+    const settings = await ensureSettings();
+    const url = `${(settings.gatewayUrl || "http://localhost:8080").replace(/\/$/, "")}/api/demo/state`;
     try {
       const resp = await fetch(url);
       if (!resp.ok) throw new Error(`gateway ${resp.status}`);
@@ -130,7 +161,8 @@
   }
 
   async function callDemo(path, body) {
-    const baseUrl = currentSettings.gatewayUrl.replace(/\/$/, "");
+    const settings = await ensureSettings();
+    const baseUrl = (settings.gatewayUrl || "http://localhost:8080").replace(/\/$/, "");
     const resp = await fetch(`${baseUrl}${path}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -189,8 +221,11 @@
         logLine("Mutation landed in Twenty. No verdict, no audit.", "warn");
         await dispatchVerdictToTwentyTab({
           mode: "no_coco",
-          message: "Stage skip applied. No governance, no record.",
-          gateway_url: currentSettings.gatewayUrl,
+          message: result.action_summary && result.action_summary.intent
+            ? `Agent ran: ${result.action_summary.intent}. No governance, no audit row.`
+            : "Stage skip applied. No governance, no record.",
+          action_summary: result.action_summary,
+          gateway_url: currentSettings.gatewayUrl || "http://localhost:8080",
         });
       }
     } catch (err) {
@@ -223,7 +258,8 @@
           pack_id: result.pack_id,
           decision_id: result.decision_id,
           decision: result.decision,
-          gateway_url: currentSettings.gatewayUrl,
+          action_summary: result.action_summary,
+          gateway_url: currentSettings.gatewayUrl || "http://localhost:8080",
         });
       }
     } catch (err) {
@@ -248,7 +284,7 @@
         );
         await dispatchVerdictToTwentyTab({
           mode: "reset",
-          gateway_url: currentSettings.gatewayUrl,
+          gateway_url: currentSettings.gatewayUrl || "http://localhost:8080",
         });
       }
     } catch (err) {
@@ -259,7 +295,20 @@
     }
   }
 
+  function paintVersion() {
+    try {
+      const m = chrome.runtime.getManifest();
+      if (m && m.version) {
+        const el = $("popup-version");
+        if (el) el.textContent = `v${m.version}`;
+      }
+    } catch (_) {
+      /* noop */
+    }
+  }
+
   document.addEventListener("DOMContentLoaded", () => {
+    paintVersion();
     setupTabs();
     $("save").addEventListener("click", save);
     $("refresh").addEventListener("click", recheck);

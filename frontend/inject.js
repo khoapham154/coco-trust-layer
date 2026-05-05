@@ -195,6 +195,48 @@
         padding: 2px 6px;
         color: #374151;
       }
+      .coco-verdict-detail {
+        padding: 0 18px 12px;
+        font-size: 12px;
+        line-height: 1.5;
+        color: #374151;
+        background: #fafafa;
+        border-top: 1px solid #f3f4f6;
+        padding-top: 12px;
+      }
+      .coco-verdict-detail-row {
+        display: flex;
+        gap: 10px;
+        align-items: baseline;
+      }
+      .coco-verdict-detail-row + .coco-verdict-detail-row {
+        margin-top: 4px;
+      }
+      .coco-verdict-detail-key {
+        flex-shrink: 0;
+        width: 80px;
+        font-weight: 600;
+        color: #6b7280;
+        text-transform: uppercase;
+        font-size: 10px;
+        letter-spacing: 0.06em;
+      }
+      .coco-verdict-detail-value {
+        flex: 1;
+        word-break: break-word;
+      }
+      .coco-verdict-detail-value code {
+        font-family: "JetBrains Mono", ui-monospace, monospace;
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        border-radius: 3px;
+        padding: 1px 5px;
+        font-size: 11px;
+      }
+      .coco-verdict-detail .observed-fail {
+        color: #b91c1c;
+        font-weight: 600;
+      }
       .coco-verdict-actions {
         display: flex;
         gap: 8px;
@@ -247,6 +289,71 @@
     return { icon: "ℹ️", label: verdict || "INFO" };
   }
 
+  function formatObserved(value) {
+    if (value === null || value === undefined) {
+      return "<span class='observed-fail'>null</span>";
+    }
+    if (typeof value === "boolean") {
+      return `<code>${value ? "true" : "false"}</code>`;
+    }
+    if (typeof value === "number") {
+      return `<code>${value}</code>`;
+    }
+    if (typeof value === "string") {
+      return `<code>${escapeHtml(value)}</code>`;
+    }
+    try {
+      return `<code>${escapeHtml(JSON.stringify(value))}</code>`;
+    } catch (_) {
+      return "<code>?</code>";
+    }
+  }
+
+  function renderDetailBlock(summary, failingCheck) {
+    const rows = [];
+    if (summary && summary.deal_name) {
+      rows.push(
+        `<div class="coco-verdict-detail-row">
+          <span class="coco-verdict-detail-key">Deal</span>
+          <span class="coco-verdict-detail-value">${escapeHtml(summary.deal_name)}</span>
+        </div>`,
+      );
+    }
+    if (summary && summary.intent) {
+      rows.push(
+        `<div class="coco-verdict-detail-row">
+          <span class="coco-verdict-detail-key">Tried</span>
+          <span class="coco-verdict-detail-value">${escapeHtml(summary.intent)}</span>
+        </div>`,
+      );
+    }
+    // For pre/post conditions: show the observed value (helps spot
+    // null / wrong field). For constraints: show the rule expression
+    // because observed is always null and the expression is what
+    // failed.
+    if (failingCheck) {
+      if (failingCheck.kind === "constraint") {
+        if (summary && summary.failing_rule_expression) {
+          rows.push(
+            `<div class="coco-verdict-detail-row">
+              <span class="coco-verdict-detail-key">Rule</span>
+              <span class="coco-verdict-detail-value"><code>${escapeHtml(summary.failing_rule_expression)}</code></span>
+            </div>`,
+          );
+        }
+      } else if (failingCheck.observed !== undefined) {
+        rows.push(
+          `<div class="coco-verdict-detail-row">
+            <span class="coco-verdict-detail-key">Observed</span>
+            <span class="coco-verdict-detail-value">${formatObserved(failingCheck.observed)}</span>
+          </div>`,
+        );
+      }
+    }
+    if (rows.length === 0) return "";
+    return `<div class="coco-verdict-detail">${rows.join("")}</div>`;
+  }
+
   function renderVerdictCard(opts) {
     removeVerdictCard();
     const gatewayUrl =
@@ -285,8 +392,10 @@
     const packId = opts.pack_id || "";
     const decisionId = opts.decision_id;
     const decision = opts.decision || {};
+    const summary = opts.action_summary || {};
     const failingCheck = (decision.checks || []).find((c) => c && c.passed === false);
     const ruleId = failingCheck && failingCheck.check_id;
+    const observedRaw = failingCheck ? failingCheck.observed : undefined;
 
     const card = document.createElement("div");
     card.className = "coco-verdict-card";
@@ -305,6 +414,7 @@
         ${packId ? `<span class="coco-verdict-pack">${escapeHtml(packId)}</span>` : ""}
         ${ruleId ? `<span class="coco-verdict-rule">rule: ${escapeHtml(ruleId)}</span>` : ""}
       </div>
+      ${renderDetailBlock(summary, failingCheck)}
       <div class="coco-verdict-actions">
         ${decisionId ? `<button class="coco-verdict-btn coco-verdict-btn-primary" data-action="evidence" type="button">Show evidence</button>` : ""}
         ${verdict === "BLOCK" && decisionId ? `<button class="coco-verdict-btn" data-action="override" type="button">Override</button>` : ""}
