@@ -31,8 +31,8 @@ matching verdict from the pack's `on_fail` field.
 
 ## End-to-end with live Twenty CRM
 
-The end-to-end path grounds every verdict in
-actual CRM state rather than a fixture:
+The end-to-end path grounds every verdict in actual CRM state rather
+than a fixture:
 
 ```
             ┌──────────────────────────── Dashboard (/dashboard) ──────────┐

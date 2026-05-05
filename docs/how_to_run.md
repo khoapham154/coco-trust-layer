@@ -77,7 +77,7 @@ docker compose -f deploy/docker-compose.yml down
 | Service      | Port | Purpose                                    |
 |--------------|------|--------------------------------------------|
 | coco-gateway | 8080 | FastAPI enforcement runtime                |
-| coco-redis   | 6379 | Job queue (wired, idle in this build) |
+| coco-redis   | 6379 | Job queue (wired, idle in this build)      |
 
 Packs are mounted read-only from `data/twenty/packs/`. The SQLite audit
 log lives at `data/runtime/audit.db` and is writable from the container.
