@@ -1,114 +1,96 @@
-# Coco Trust Layer — Architecture
+# Architecture
 
-## What it is
-
-Coco is the Trust Layer between AI agents and Enterprise SaaS. It enforces
-behavioral contracts (Action Packs) at runtime, before an agent touches
-the SaaS, and catches silent failures after the action by comparing the
-observed UI state against post-conditions.
+Coco sits between AI agents and the SaaS they act on. Before the agent
+mutates a record, it asks Coco. The gateway evaluates a YAML policy
+against live state, returns a verdict, and writes the decision to the
+audit log.
 
 ## Three pillars
 
-- **Define** — Action Packs (YAML) describe what an agent is allowed to do.
-- **Enforce** — The Gateway runs the pack against a live UI state on every
-  request and returns a verdict.
-- **Observe** — Every verdict is persisted to the audit log for
-  traceability and compliance.
+- **Define.** Action Packs (YAML) describe what an agent is allowed to do.
+- **Enforce.** The gateway evaluates the pack against live UI state on
+  each call and returns a verdict.
+- **Observe.** Every verdict lands in the audit ledger for compliance
+  and replay.
 
 ## Request flow
 
 ```
 Agent ──► Coco SDK ──► Gateway ──┬─► Pre-conditions  ─┐
-(N8N,    (embedded    (FastAPI)  ├─► Constraints       ├─► Verdict
- Zapier,  in SaaS                └─► Post-conditions  ─┘   (ALLOW/BLOCK/
- custom)  frontend)                                        ESCALATE)
-                                   │
-                                   └─► SQLite audit log
+(N8N,     (embedded   (FastAPI)  ├─► Constraints      ├─► Verdict
+ Zapier,   in SaaS               └─► Post-conditions  ─┘   (ALLOW /
+ custom)   frontend)                                       BLOCK /
+                                  │                        ESCALATE)
+                                  └─► SQLite audit log
 ```
 
-Every request short-circuits on the first failing check and returns the
-matching verdict from the pack's `on_fail` field.
+Every request short-circuits on the first failing check. The matching
+`on_fail` verdict and `reason` become the decision's primary reason.
 
-## End-to-end with live Twenty CRM
+## Live Twenty path
 
-The end-to-end path grounds every verdict in actual CRM state rather
-than a fixture:
+The dashboard and the agent share the same gateway. The agent reads
+Twenty REST and projects it into the pack-ready `ui_state` shape.
 
 ```
-            ┌──────────────────────────── Dashboard (/dashboard) ──────────┐
-            │                                                               │
-            │   [Pack grid]   [Scenario grid]   [Verdict panel]   [Audit]   │
-            │                                                               │
-            └──────────────────────────▲──────────────────┬─────────────────┘
-                                       │                  │
-                              /api/scenarios              │ POST /api/scenarios/{id}/run
-                              /api/audit                  │      ?driver=engine|twenty
-                                       │                  ▼
-┌──────────────────────────────────────────────────────────────────────────┐
-│  Coco Gateway (FastAPI :8080)                                            │
-│                                                                          │
-│  routes/validate    ◄───── agent HTTP POST (sync httpx, threadpooled)    │
-│  routes/scenarios   ─────► agents.TwentyAgent.run(id)                    │
-│  routes/packs        read ─► data/twenty/packs/*.yaml                    │
-│  routes/audit        read ─► db/audit.db                                 │
-│  routes/dashboard   serve ─► backend/dashboard/templates/index.html      │
-│  /sdk/* + /static/* serve ─► frontend/*.js + backend/dashboard/static/*  │
-└──────────────────────────────────────▲───────────────────────────────────┘
-                                       │
-                                       │  TwentyStateProvider builds ui_state
-                                       │  from live Twenty REST responses
-                                       │
-┌──────────────────────────────────────▼───────────────────────────────────┐
-│  Twenty CRM (docker compose :3000)                                       │
-│  /rest/opportunities, /rest/people, /rest/companies, /rest/tasks         │
-└──────────────────────────────────────▲───────────────────────────────────┘
-                                       │
-                                       │  Bookmarklet injects Coco SDK into
-                                       │  the live Twenty tab (inject.js)
-                                       │
-                                  User's browser
+            ┌──────────── Dashboard (/dashboard) ─────────────┐
+            │                                                 │
+            │  Live · Escalations · Packs · Audit · Settings  │
+            │                                                 │
+            └──────────────────▲─────────────┬────────────────┘
+                               │             │
+                       /api/audit             │ POST /api/scenarios/{id}/run
+                       /api/metrics/live      │      ?driver=engine|twenty
+                       /api/escalations       │
+                       /api/packs[/yaml]      ▼
+┌──────────────────────────────────────────────────────────────┐
+│  Coco Gateway (FastAPI :8080)                                │
+│  validate · packs · packs_yaml · scenarios · metrics ·       │
+│  escalations · audit · audit_advanced · twenty_ops · demo    │
+└──────────────────▲───────────────────────────────────────────┘
+                   │ TwentyStateProvider reads /rest/* and
+                   │ projects it to ui_state.
+┌──────────────────▼───────────────────────────────────────────┐
+│  Twenty CRM (docker compose :3000)                           │
+└──────────────────▲───────────────────────────────────────────┘
+                   │ Bookmarklet or extension injects
+                   │ coco-sdk.js + inject.js (shadow DOM)
+                   │
+              User's browser
 ```
 
-Two drivers share the same gateway:
+Two drivers share the same evaluator:
 
-- **`driver=engine`** — scenario's fixture `ui_state` goes straight to
-  the engine. Fast, no external services. Used by
-  `run_twenty_scenarios.py` and `tests/test_dashboard.py`.
-- **`driver=twenty`** — `TwentyAgent` loads the scenario, asks
-  `TwentyStateProvider` to build live `ui_state` from Twenty REST, calls
-  `/api/validate` (via a thread so sync httpx doesn't deadlock the
-  event loop), and on `ALLOW` performs the real CRUD (PATCH stage,
-  DELETE contact, PATCH field, …). On `BLOCK` or `ESCALATE` it records
-  the refusal and skips the mutation.
+- `driver=engine` runs the scenario's fixture `ui_state` straight through
+  the engine. No external services. Used by the regression runner.
+- `driver=twenty` lets the agent build `ui_state` from live Twenty,
+  call the gateway, and on `ALLOW` execute the mutation.
 
-When Twenty isn't running, `driver=twenty` degrades gracefully: the
-agent falls back to the scenario's own fixture state, still calls the
-real gateway, and still writes an audit row. This is what the
-`smoke_e2e.sh` "driver=twenty path reachable" assertion is exercising.
+When Twenty is unreachable, the agent falls back to the scenario's own
+fixture state. The gateway still runs, the audit row still lands.
 
-## Data model
+## Pack model
 
-A pack (`data/twenty/packs/*.yaml`) has three sections:
+Each pack (`data/twenty/packs/*.yaml`) has three sections:
 
-- **`pre_conditions`** — checks that must pass before the action runs.
-  Each check has a `type` (`exists`, `not_empty`, `equals`, `greater_than`,
-  ...), a `path` into the UI state, an expected `value`, and an `on_fail`
-  verdict.
-- **`constraints`** — boolean DSL expressions. The DSL is a safe subset of
-  Python (no calls, no imports, no dunder access) evaluated against the UI
-  state. Keys of the state become top-level names:
+- **`pre_conditions`.** Typed checks that must pass before the action
+  runs. Each one has a `type` (`exists`, `not_empty`, `equals`,
+  `greater_than`, ...), a `path` into the UI state, an expected `value`,
+  and an `on_fail` verdict.
+- **`constraints`.** Boolean DSL expressions. The DSL is a safe subset
+  of Python (no calls, no imports, no dunders). State keys become
+  top-level names:
   ```
   deal.amount < 50000 or deal.manager_field_filled == True
   ```
-- **`post_conditions`** — same shape as `pre_conditions`, run *after* the
-  action. This is the silent-failure detector: if the API returned 200 but
-  the UI still shows the old value, post-conditions catch it.
+- **`post_conditions`.** Same shape as `pre_conditions`. They run after
+  the mutation and catch silent failures (API returned 200 but the UI
+  still shows the old value).
 
-## Why the DSL pre-aggregates list checks
+## Why state is pre-aggregated
 
-The DSL does not allow function calls, so rules can't iterate lists
-(`any(r.do_not_contact for r in email.recipients)` is illegal). Instead,
-the state provider pre-computes aggregates *before* calling the gateway:
+The DSL forbids function calls, so rules cannot iterate lists. Instead
+the state provider pre-computes aggregates before calling the gateway:
 
 ```json
 {
@@ -120,72 +102,73 @@ the state provider pre-computes aggregates *before* calling the gateway:
 }
 ```
 
-The rule then becomes a simple comparison:
+A rule then reduces to a comparison:
 
 ```
 email.recipient_count <= 50
 not email.has_flagged_recipient
 ```
 
-This is how real state adapters already work (`state_provider.py` pattern),
-and it keeps the DSL tiny and auditable — critical for a compliance
-product.
+This keeps the DSL tiny and auditable, which is what a compliance
+product needs.
 
-The first concrete adapter is
-[`backend/providers/twenty.py`](../backend/providers/twenty.py). It
-exposes one method per pack family — `deal_state`, `contact_state`,
-`opportunity_state`, `email_state`, `field_update_state` — each of
-which hits Twenty REST and returns a dict that matches the
-`ui_state` shape the corresponding pack expects. The
-`TwentyAgent.run(scenario_id)` driver composes provider + gateway +
-Twenty REST into one observable trace.
+The first concrete provider is `backend/providers/twenty.py`. It exposes
+one method per pack family: `deal_state`, `contact_state`,
+`opportunity_state`, `email_state`, `field_update_state`. Each hits
+Twenty REST and returns a dict shaped for the matching pack.
+`agents/twenty_agent.py` composes provider, gateway and Twenty mutation
+into one traceable run.
 
 ## Verdicts
 
-- **`ALLOW`** — every check passed. The agent is cleared to execute.
-- **`BLOCK`** — a hard rule was violated. The action must not run.
-- **`ESCALATE`** — a soft rule was violated. A human must review before
-  running.
-- **`ROLLBACK`** — (reserved) post-action revert. Not implemented in the
-  MVP.
+- **`ALLOW`.** Every check passed. The agent proceeds.
+- **`BLOCK`.** A hard rule was violated. The action must not run.
+- **`ESCALATE`.** A soft rule was violated. A human reviews it in the
+  dashboard. Approve writes a follow-up ALLOW; deny writes a follow-up
+  BLOCK.
+- **`ROLLBACK`.** Reserved for post-action revert. Not in the MVP.
 
 ## Short-circuit semantics
 
 Checks run in order:
 
-1. `pre_conditions` (or `post_conditions` when `phase == "post"`)
-2. `constraints` (only on `phase == "pre"`)
+1. `pre_conditions` (or `post_conditions` when `phase == "post"`).
+2. `constraints` (only when `phase == "pre"`).
 
-The first failing check wins. Its `on_fail` verdict and `reason` are the
-decision's `primary_reason`. All checks that ran are recorded in the
-decision's `checks` array for audit.
+The first failing check wins. Its `on_fail` verdict and `reason` become
+the decision's `primary_reason`. All checks that ran are recorded in
+the decision's `checks` array.
 
 ## Audit log
 
-Every call to `/api/validate` writes one row to `audit_log` (SQLite by
-default, PostgreSQL is the production upgrade path). The row contains the
-timestamp, pack_id, action, phase, verdict, primary_reason, and the full
-decision JSON for replay.
+Every `/api/validate` call writes one row to `audit_log` (SQLite by
+default, PostgreSQL the production upgrade path). The row contains
+timestamp, pack_id, action, phase, verdict, primary_reason and the full
+decision JSON for replay. Escalation approve/deny decisions live in a
+sibling `escalation_status` table and also write follow-up audit rows.
 
-## Scope boundary
+## Pack edits
 
-This module is the **runtime enforcement layer**. It does not own:
+`PUT /api/packs/{id}/yaml` validates with the existing pydantic schema,
+snapshots the previous version to
+`data/twenty/packs/_versions/<pack id>/<timestamp>.yaml`, writes the
+new file, and hot-reloads the engine. The next verdict uses the new
+policy. Revert restores any snapshot.
 
-- State capture from the browser — that is the SDK's job
-  (`frontend/coco-sdk.js`).
-- State pre-aggregation for list rules — the state provider in the partner
-  SaaS adapter is responsible (`backend/providers/twenty.py` is the first
-  reference implementation).
-- Agent orchestration — N8N, Zapier, and custom agents call the gateway;
-  the gateway does not call them. `agents/twenty_agent.py` is a reference
-  driver that happens to live in this repo but could equally live in a
-  customer's codebase.
-- Hosting Twenty — the `scripts/setup_twenty.sh` self-host is a
-  convenience for demos; production Twenty is whatever the customer runs.
+## Scope
 
-What the gateway *does* own:
+The gateway owns:
 
-- The dashboard at `/dashboard` (`backend/dashboard/`).
-- Serving the SDK + inject bootstrap at `/sdk/*`.
-- `/api/scenarios` — exposing the 19 pre-built scenarios to the UI and
-  running them against either driver.
+- `/dashboard` (`backend/dashboard/`).
+- SDK delivery at `/sdk/*`.
+- `/api/scenarios` and the engine/twenty drivers.
+- The sandbox at `/sandbox/twenty` for trying the user-facing overlay
+  without standing up Twenty.
+
+The gateway does not own:
+
+- Browser state capture (the SDK handles that).
+- State pre-aggregation for list rules (a provider's job).
+- Agent orchestration (N8N, Zapier and custom agents call the gateway,
+  not the other way round).
+- Hosting Twenty (`scripts/setup_twenty.sh` is a demo convenience).

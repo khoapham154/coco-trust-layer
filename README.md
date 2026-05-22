@@ -1,310 +1,189 @@
 # Coco Trust Layer
 
-> Runtime governance between AI agents and Enterprise SaaS.
-> Validates every agent action against a YAML behavioral contract,
-> returns **ALLOW / BLOCK / ESCALATE**, and writes an immutable
-> audit log — all without the agent knowing the difference.
+Runtime governance for AI agents acting on enterprise SaaS. The agent
+asks before it acts. Coco checks the request against a YAML policy,
+returns **ALLOW**, **BLOCK** or **ESCALATE**, and writes the verdict to
+an audit log.
 
 ![license](https://img.shields.io/badge/license-MIT-1d4ed8)
-![tests](https://img.shields.io/badge/tests-45%2F45%20green-047857)
-![packs](https://img.shields.io/badge/packs-5%20loaded-047857)
+![tests](https://img.shields.io/badge/tests-45%2F45-047857)
+![packs](https://img.shields.io/badge/packs-5-047857)
 
----
+![Live dashboard](docs/images/dashboard_live.png)
 
-## Table of contents
+## What it does
 
-1. [What Coco is](#1-what-coco-is)
-2. [Why it exists](#2-why-it-exists)
-3. [Architecture at a glance](#3-architecture-at-a-glance)
-4. [5-minute quickstart (gateway only)](#4-5-minute-quickstart-gateway-only)
-5. [End-to-end demo with Twenty CRM](#5-end-to-end-demo-with-twenty-crm)
-6. [Chromium browser extension](#6-chromium-browser-extension)
-7. [The five Twenty Action Packs](#7-the-five-twenty-action-packs)
-8. [Testing](#8-testing)
-9. [Repo layout](#9-repo-layout)
-10. [License](#10-license)
+Three building blocks:
 
----
-
-## 1. What Coco is
-
-Coco is a lightweight runtime that sits between an AI agent and the SaaS
-applications it acts on. When the agent tries to mutate a record — move
-a deal stage, delete a contact, send a bulk email — Coco validates the
-request against a **YAML Action Pack** that spells out the business
-rules.
-
-Every pack has three parts:
-- **Pre-conditions** — state that must hold before the action runs
-  (owner assigned, tasks completed, user has the right role).
-- **Constraints** — DSL expressions over live state
-  (no more than 50 recipients, amount within budget, no do-not-contact
-  flag).
-- **Post-conditions** — drift checks that run after the mutation lands
-  (required fields still filled, stage didn't skip).
+1. **Action Packs.** Plain YAML files that describe what an action must
+   look like to be valid. RevOps writes them, not engineering.
+2. **Gateway.** A FastAPI service. Receives the agent's intent, reads
+   live state from the SaaS, evaluates the pack, returns a verdict.
+3. **Audit ledger.** SQLite. Every verdict, every reason, every
+   policy version that fired.
 
 Three verdicts:
 
-| Verdict    | Effect                                                      |
-|------------|-------------------------------------------------------------|
-| `ALLOW`    | Agent proceeds, mutation lands in SaaS, audit row written.  |
-| `BLOCK`    | Mutation is skipped, refusal is logged with the reason.     |
-| `ESCALATE` | Mutation is skipped, a human-review ticket is recorded.     |
+| Verdict    | Effect                                           |
+|------------|--------------------------------------------------|
+| `ALLOW`    | Action proceeds. Mutation lands. Row written.    |
+| `BLOCK`    | Action skipped. Reason logged.                   |
+| `ESCALATE` | Action paused. Human reviews it in the dashboard.|
 
-Every verdict is written to an immutable audit ledger
-(`data/runtime/audit.db`).
+## Why
 
-## 2. Why it exists
+Modern copilots write to CRMs, EHRs and finance tools at a pace human
+RBAC was never designed for. Vendor permissions cover users, not agents
+that do twenty things a minute. When an agent does the wrong thing, the
+blast radius is large and the trail is thin.
 
-**The agent-action problem.** Copilots now push updates into CRMs, EHRs,
-ticketing systems, and finance tools. The SaaS vendor's own RBAC was
-designed for humans, not for an agent that completes twenty actions a
-minute. When an agent does the wrong thing — skips a deal stage, deletes
-a contact with open opportunities, emails a do-not-contact list — the
-blast radius is large and the root cause is hard to trace.
+Hard-coded guards do not scale. Each tenant has different stages,
+different retention rules, different review thresholds. The people who
+know the rules cannot edit Python. YAML packs let them write the policy
+and Coco enforces it.
 
-**Why not hard-code guards.** Every vendor has a different pipeline, a
-different stage enum, a different retention policy. Hard-coded guards
-turn into a maintenance nightmare; the people who know the rules (RevOps,
-Compliance, Legal) can't edit code. YAML packs let the right humans
-author the rules and Coco enforces them without rebuilding the agent.
-
-**Why compile-time guards aren't enough.** The agent's plan is generated
-at runtime; static analysis sees a benign LLM call. Coco intercepts the
-HTTP mutation itself, checks live state at the moment of the action, and
-writes a receipt that ties agent → action → verdict → outcome.
-
-## 3. Architecture at a glance
-
-```
-  ┌────────┐     ┌────────────┐     ┌────────────────┐
-  │ Agent  │────▶│  Coco SDK  │────▶│  Coco Gateway  │─┐
-  └────────┘     └────────────┘     └────────────────┘ │
-                                          │ POST /api/ │
-                                          │  validate  │
-                                          ▼            │
-                                    ┌────────────┐     │
-                                    │  Packs +   │     │
-                                    │ State +    │─────┼──▶ Twenty CRM
-                                    │ DSL engine │     │   (live REST)
-                                    └────────────┘     │
-                                          │            │
-                                          ▼            │
-                                    ┌────────────┐     │
-                                    │ Audit log  │◀────┘
-                                    │ (SQLite)   │
-                                    └────────────┘
-```
-
-- **Gateway** — FastAPI process on `:8080`. Loads YAML packs at startup,
-  exposes `/api/validate`, `/api/packs`, `/api/audit`, `/api/scenarios`,
-  `/dashboard`, `/sdk/*`, `/browser-extension.zip`, `/health`.
-- **Provider** — Python adapter (`backend/providers/twenty.py`) that
-  reads live Twenty REST state and projects it into the pack-ready
-  `ui_state` shape. Version-tolerant filter grammar baked in
-  (works against Twenty 0.30 and 0.32).
-- **Agent** — `agents/twenty_agent.py` composes provider → gateway →
-  Twenty mutation. On `ALLOW` it PATCHes the record; on `BLOCK` /
-  `ESCALATE` it records the refusal and stops.
-- **SDK** — Vanilla JS, no build, no deps (`frontend/coco-sdk.js`).
-  Captures DOM state into a plain object and calls `POST /api/validate`.
-- **Dashboard** — Pure HTML + CSS + JS served by the gateway at
-  `/dashboard`. Six-step Twenty onboarding wizard, live scenario runner,
-  audit viewer.
-- **Browser extension** — Chromium MV3, loads the SDK in the page's
-  MAIN world at `document_idle`. Zero configuration once installed.
-
-## 4. 5-minute quickstart (gateway only)
+## Quickstart
 
 ```bash
-# 1. Clone
 git clone git@github.com:khoapham154/coco-trust-layer.git
 cd coco-trust-layer
 
-# 2. Environment
 conda create -n coco python=3.11 -y
 conda activate coco
 pip install -r backend/requirements.txt
 
-# 3. Gateway in tmux (mandatory per project convention)
 tmux new-session -d -s coco_gateway -c $PWD
 tmux send-keys -t coco_gateway \
-  'PYTHONPATH=$PWD uvicorn main:app --app-dir backend --host 0.0.0.0 --port 8080' Enter
+  'COCO_ALLOW_DEMO_RESET=1 PYTHONPATH=$PWD uvicorn main:app \
+     --app-dir backend --host 0.0.0.0 --port 8080' Enter
 
-# 4. Verify
-curl -s http://localhost:8080/health | jq
-# → {"status":"ok","packs_loaded":5}
+curl -s localhost:8080/health
+# {"status":"ok","packs_loaded":5}
 
-# 5. Open the dashboard
 open http://localhost:8080/dashboard
 ```
 
-The dashboard works standalone — the "driver: Engine" toggle runs
-scenarios against shipped fixtures, no Twenty required.
+No Twenty needed for the dashboard. Open the built-in sandbox at
+`http://localhost:8080/sandbox/twenty` to try the user-facing overlay.
 
-## 5. End-to-end demo with Twenty CRM
+## What you see
 
-The dashboard's Twenty panel is a **six-step wizard**. Complete it and
-the gateway drives a real deal-stage change in Twenty.
+### Live
 
-### Prerequisites
+Verdicts stream in from the gateway. Tiles for throughput, block rate,
+p95 latency, escalations pending. Click any row to see the full
+decision JSON and the YAML rule that fired.
 
-- Docker installed and in PATH
-- `git` (for the Twenty clone)
-- ~2 GB free disk (Twenty's Postgres + images)
+![Live](docs/images/dashboard_live.png)
 
-### Step 0 — Enable the wizard's seed subprocess
+### Action Packs
 
-The wizard's "Run seed" button spawns `scripts/seed_twenty.py` as a
-subprocess. For safety it's gated on an env var. Restart the gateway
-with:
+The five Twenty packs as editable YAML. Edit, save, and the gateway
+hot-reloads the engine. Previous versions snapshot to disk so you can
+revert.
+
+![Packs](docs/images/dashboard_packs.png)
+
+### Escalations
+
+Verdicts that need a human. Approve to retry the action, deny to keep
+the block. Both decisions write follow-up audit rows.
+
+![Escalations](docs/images/dashboard_escalations.png)
+
+### Audit Ledger
+
+Full table. Filter by pack, verdict, date and reason text. Export to
+CSV with every decision's JSON.
+
+![Audit](docs/images/dashboard_audit.png)
+
+### Twenty overlay (user-facing)
+
+Inside Twenty, a small badge sits in the corner. When an agent (or a
+user) attempts a blocked action, Coco interrupts with a modal that
+names the policy, the failing rule and the plain-English reason. The
+"See policy" button opens the YAML with the firing rule highlighted.
+
+![Sandbox block](docs/images/sandbox_block_modal.png)
+![Policy drawer](docs/images/sandbox_policy_drawer.png)
+
+The overlay runs inside a Shadow DOM so Twenty's CSS cannot break it.
+To try it without setting up Twenty, open the built-in sandbox at
+`/sandbox/twenty`.
+
+## End to end with real Twenty
+
+You need Docker. About 2 GB of disk for the Postgres + images.
 
 ```bash
-tmux send-keys -t coco_gateway C-c
-tmux send-keys -t coco_gateway \
-  'COCO_ALLOW_WIZARD_EXEC=1 PYTHONPATH=$PWD uvicorn main:app --app-dir backend --host 0.0.0.0 --port 8080' Enter
+bash scripts/setup_twenty.sh        # ~5 min first run
+# open http://localhost:3000, create account, Settings → Developers → API key
+export TWENTY_API_KEY=eyJ...
+python scripts/seed_twenty.py       # 5 companies, 10 people, 3 deals
 ```
 
-### Step 1 — Gateway health (wizard step 1)
+Back in the dashboard, go to Integrations, paste the API key, test the
+connection. Drag the bookmarklet to your bookmarks bar. Click it on a
+Twenty tab. The Coco badge appears.
 
-Click **Check /health**. Should go green with "5 packs loaded".
+For the full sequence, see [docs/demo_walkthrough.md](docs/demo_walkthrough.md).
 
-### Step 2 — Boot Twenty (wizard step 2)
+## Action Packs
 
-```bash
-tmux new-session -d -s twenty_up -c $PWD
-tmux send-keys -t twenty_up \
-  'bash scripts/setup_twenty.sh 2>&1 | tee logs/twenty_up.log' Enter
-```
+| Pack                        | Action               | Governs                              |
+|-----------------------------|----------------------|--------------------------------------|
+| `twenty.deal_stage_move`    | `move_stage`         | Pipeline transitions, high-value review |
+| `twenty.contact_delete`     | `delete_contact`     | Contact lifecycle, role enforcement |
+| `twenty.opportunity_create` | `create_opportunity` | Deal creation, data integrity |
+| `twenty.bulk_email`         | `send_bulk_email`    | Outreach limits, do-not-contact     |
+| `twenty.field_update`       | `update_field`       | Required fields, archived records   |
 
-First run pulls Docker images (~5 min). When `docker ps` shows 4
-`twenty-*` containers healthy, you're ready.
-
-Open `http://localhost:3000` → create an admin account → Settings →
-Developers → API keys → **Create key**. Copy the `eyJ…` token.
-
-### Step 3 — Connect API key (wizard step 3)
-
-Paste the token into the **API key** field. Click **Test connection**.
-The gateway calls Twenty's `/rest/companies?limit=1` with your token;
-green pill = 200 OK.
-
-### Step 4 — Seed fixtures (wizard step 4)
-
-Click **Run seed**. Creates 5 companies, 10 people, 3 opportunities in
-your Twenty instance, and PATCHes a `pointOfContactId` (deal owner)
-onto each opportunity so the `deal_stage_move` pack's pre-condition
-passes. IDs land in `data/twenty/fixtures/seeded.json`.
-
-### Step 5 — Install the browser extension (wizard step 5)
-
-Click **Download extension (.zip)**, unzip, `chrome://extensions` →
-Developer mode → **Load unpacked** → pick the folder. Reload the
-Twenty tab — a floating Coco pill appears bottom-right.
-
-### Step 6 — Run a live scenario (wizard step 6)
-
-Click **Run deal_stage_move_allow**. The agent:
-1. Reads the live opportunity state (owner assigned, stage = NEW)
-2. Calls `POST /api/validate` on the gateway
-3. Gateway evaluates `twenty.deal_stage_move` — all checks pass
-4. Agent PATCHes Twenty's opportunity with `stage=SCREENING`
-5. Audit row lands in the ledger
-
-**Expected verdict card:**
-`ALLOW · twenty.deal_stage_move` + `Twenty mutation applied ✓`
-
-Refresh the "Northwind Labs — Enterprise Trust Layer" opportunity in
-Twenty — stage has advanced NEW → SCREENING.
-
-## 6. Chromium browser extension
-
-`browser-extension/` is a Chromium MV3 extension that auto-injects the
-SDK into every matching Twenty tab.
-
-### Install
-
-1. Download `http://localhost:8080/browser-extension.zip` (served fresh
-   from the running gateway), or zip `browser-extension/` yourself.
-2. Unzip anywhere.
-3. `chrome://extensions` → **Developer mode** (top-right) →
-   **Load unpacked** → pick the unzipped folder.
-
-### Use
-
-- On `http://localhost:3000/*` or `https://*.twenty.com/*`, the MAIN-world
-  content script loads `bootstrap-config.js → coco-sdk.js → inject.js`
-  at `document_idle`.
-- A floating **Coco** pill renders bottom-right with health status and a
-  "Validate current page" button.
-- Click the extension toolbar icon to change the gateway URL, toggle the
-  extension, or jump to the dashboard.
-
-### Why MAIN-world content scripts
-
-Earlier versions used `chrome.scripting.executeScript({world: "MAIN"})`
-from the service worker, which silently failed on some SPA tabs.
-Manifest V3's native `"world": "MAIN"` (Chrome 111+) is the bulletproof
-path — no message passing, no fetch, no CSP dance.
-
-## 7. The five Twenty Action Packs
-
-All live under `data/twenty/packs/` as editable YAML. Product Managers
-can extend them without touching Python.
-
-| Pack                        | Action               | Governs                                  |
-|-----------------------------|----------------------|------------------------------------------|
-| `twenty.deal_stage_move`    | `move_stage`         | Pipeline transitions, high-value review  |
-| `twenty.contact_delete`     | `delete_contact`     | Contact lifecycle, role enforcement      |
-| `twenty.opportunity_create` | `create_opportunity` | Deal creation, data integrity            |
-| `twenty.bulk_email`         | `send_bulk_email`    | Outreach governance, do-not-contact list |
-| `twenty.field_update`       | `update_field`       | Required fields, archived records        |
-
-Each pack is auditable in ~50 lines of YAML. The DSL is a safe AST
-subset of Python: comparisons, boolean operators, dotted attribute reads.
-No calls, no dunders, no imports, no lambdas. See
+Packs live in `data/twenty/packs/`. Each is ~30 lines of YAML. The DSL
+is an AST-safe subset of Python: comparisons, booleans, dotted reads.
+No calls, no dunders, no imports. See
 [`backend/engine/dsl.py`](backend/engine/dsl.py).
 
-## 8. Testing
+## Testing
 
 ```bash
-conda activate coco
-PYTHONPATH=$PWD pytest tests/ -v                        # 45 tests, all green
-PYTHONPATH=$PWD python tests/run_twenty_scenarios.py    # 19/19 pack regression
-bash scripts/smoke_e2e.sh                               # gateway end-to-end
+PYTHONPATH=$PWD pytest tests/ -v                        # 45 unit tests
+PYTHONPATH=$PWD python tests/run_twenty_scenarios.py    # 19/19 regression
+bash scripts/journeys_smoke.sh                          # 6 product journeys
 ```
 
-`tests/run_twenty_scenarios.py --base-url http://localhost:8080` runs
-the same 19 scenarios against a live gateway container instead of
-in-process.
+`journeys_smoke.sh` walks the six product journeys (install,
+Live + metrics, escalations, policy edit, validate, audit + CSV) against
+a running gateway. Useful as a deploy gate.
 
-## 9. Repo layout
+## Repo
 
 ```
 coco-trust-layer/
-├── backend/             FastAPI gateway, engine, Twenty provider, dashboard
-│   ├── engine/          Pydantic models, AST-safe DSL, decision short-circuit
-│   ├── routes/          validate, packs, audit, scenarios, twenty_ops, dashboard
-│   ├── providers/       TwentyStateProvider — pre-aggregates list state for DSL
-│   ├── dashboard/       templates/index.html + static/{app.js, styles.css, wizard.js, assets/}
-│   └── db/              SQLite audit log
-├── agents/              Python agent driving Twenty REST CRUD via the gateway
-├── frontend/            Vanilla JS SDK + bootstrap inject.js + smoke-test page
-├── browser-extension/   Chromium MV3 extension (MAIN-world content scripts)
+├── backend/
+│   ├── engine/             pydantic models, AST-safe DSL
+│   ├── routes/             validate, packs, packs_yaml, audit, audit_advanced,
+│   │                       scenarios, metrics, escalations, twenty_ops, demo, dashboard
+│   ├── providers/twenty.py live Twenty REST → ui_state projection
+│   ├── dashboard/          templates/index.html + static/{app.js, styles.css, tokens.css}
+│   └── db/audit_log.py     SQLite ledger + escalation_status
+├── agents/                 Python agent (Twenty REST via the gateway)
+├── frontend/               coco-sdk.js + inject.js (Shadow-DOM overlay)
+├── browser-extension/      Chromium MV3 (MAIN-world content scripts)
 ├── data/twenty/
-│   ├── packs/           5 YAML Action Packs (PM-editable, no code)
-│   ├── scenarios/       19 JSON scenario fixtures
-│   └── fixtures/        Twenty seed-data IDs (runtime — gitignored)
-├── tests/               pytest suite (45 tests) + pack-engine regression runner
-├── scripts/             setup_twenty.sh, seed_twenty.py, smoke_e2e.sh
-├── deploy/              Docker Compose for local dev
-├── docs/                architecture, how_to_run, twenty_integration, demo walkthrough
-├── LICENSE              MIT
-└── README.md            (this file)
+│   ├── packs/              5 YAML packs + auto-snapshotted _versions/
+│   └── scenarios/          19 JSON scenario fixtures
+├── tests/                  pytest + scenario regression
+├── scripts/                setup_twenty.sh, seed_twenty.py,
+│                           journeys_smoke.sh, snapshot.py, test_overlay.py
+├── deploy/                 docker-compose for local dev
+├── docs/                   architecture, how_to_run, twenty_integration,
+│                           demo_walkthrough, images/
+└── README.md
 ```
 
-## 10. License
+## License
 
-MIT — see [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).
 
 Copyright © 2026 Khoa Pham.

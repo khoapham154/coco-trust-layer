@@ -75,12 +75,23 @@ class AgentActionPack(BaseModel):
         return cls.model_validate(raw)
 
     @classmethod
+    def from_yaml_text(cls, text: str, source_name: str = "<text>") -> "AgentActionPack":
+        raw = yaml.safe_load(text)
+        if not isinstance(raw, dict):
+            raise ValueError(f"Pack source {source_name} must be a YAML mapping")
+        return cls.model_validate(raw)
+
+    @classmethod
     def load_all(cls, pack_dir: Path) -> Dict[str, "AgentActionPack"]:
         pack_dir = Path(pack_dir)
         if not pack_dir.exists():
             raise FileNotFoundError(f"Pack directory not found: {pack_dir}")
         out: Dict[str, AgentActionPack] = {}
         for yaml_file in sorted(pack_dir.glob("*.yaml")):
+            # Skip version snapshots — they live in subdirs prefixed with
+            # underscore (e.g. _versions/). Top-level files only.
+            if any(part.startswith("_") for part in yaml_file.relative_to(pack_dir).parts):
+                continue
             pack = cls.from_yaml_file(yaml_file)
             if pack.id in out:
                 raise ValueError(f"Duplicate pack id: {pack.id}")

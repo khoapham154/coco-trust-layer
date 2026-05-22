@@ -26,6 +26,7 @@ router = APIRouter()
 _BACKEND_DIR = Path(__file__).resolve().parent.parent
 _DASHBOARD_DIR = _BACKEND_DIR / "dashboard"
 _TEMPLATE_PATH = _DASHBOARD_DIR / "templates" / "index.html"
+_SANDBOX_PATH = _DASHBOARD_DIR / "templates" / "twenty_sandbox.html"
 
 # SDK is shipped from the sibling `frontend/` directory. In Docker we
 # mount it to /app/frontend; in local dev it's the repo sibling of
@@ -45,6 +46,21 @@ async def dashboard() -> HTMLResponse:
         )
     html = _TEMPLATE_PATH.read_text(encoding="utf-8")
     return HTMLResponse(content=html)
+
+
+@router.get("/sandbox/twenty", response_class=HTMLResponse)
+async def twenty_sandbox() -> HTMLResponse:
+    """Synthetic Twenty CRM page with the Coco overlay pre-loaded.
+
+    Lets you try the user-facing surface (badge, blocked modal, policy
+    drawer, override flow) without standing up Twenty itself.
+    """
+    if not _SANDBOX_PATH.exists():
+        raise HTTPException(
+            status_code=500,
+            detail=f"Sandbox template missing: {_SANDBOX_PATH}",
+        )
+    return HTMLResponse(content=_SANDBOX_PATH.read_text(encoding="utf-8"))
 
 
 @router.get("/sdk/coco-sdk.js")

@@ -15,10 +15,14 @@ from config import settings
 from db import AuditLog
 from engine import AgentActionPack, GatewayEngine
 from routes import (
+    audit_advanced_router,
     audit_router,
     dashboard_router,
     demo_router,
+    escalations_router,
+    metrics_router,
     packs_router,
+    packs_yaml_router,
     scenarios_router,
     twenty_ops_router,
     validate_router,
@@ -60,8 +64,12 @@ app.add_middleware(
 
 app.include_router(validate_router)
 app.include_router(packs_router)
+app.include_router(packs_yaml_router)
 app.include_router(audit_router)
+app.include_router(audit_advanced_router)
 app.include_router(scenarios_router)
+app.include_router(metrics_router)
+app.include_router(escalations_router)
 app.include_router(twenty_ops_router)
 app.include_router(demo_router)
 app.include_router(dashboard_router)

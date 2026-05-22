@@ -1,515 +1,1550 @@
-/* Coco Trust Layer — dashboard frontend logic.
+/* Coco Trust Layer — dashboard application.
  *
- * Talks to the real gateway at same-origin endpoints:
- *   GET  /api/packs
- *   GET  /api/packs/{id}
- *   GET  /api/scenarios
- *   GET  /api/scenarios/{id}
- *   POST /api/scenarios/{id}/run?driver=engine|twenty
- *   GET  /api/audit?limit=50
- *   GET  /health
+ * Single-file, no-build vanilla JS. Organised by region; see headers
+ * below. Talks to the existing FastAPI gateway via /api/* endpoints and
+ * adds light client-side state in the URL hash so refresh + share work.
  *
- * No frameworks, no build step. Runs straight from the <script> tag
- * and renders into elements defined in templates/index.html.
+ * Regions:
+ *   1. utils         escape, format, fetchJson, debounce, time
+ *   2. glyphs        inline SVG sprite (no icon CDN)
+ *   3. toast         transient notifications
+ *   4. drawer        verdict / pack detail drawer (shared)
+ *   5. palette       cmd-k jump-to
+ *   6. api           thin wrapper around fetch + small in-memory cache
+ *   7. router        hash-based router with query state
+ *   8. views         live, escalations, packs, audit, integrations,
+ *                    settings, onboarding (one render function each)
+ *   9. bootstrap     init, sidebar binding, global keyboard, polling
  */
-
 (function () {
   "use strict";
 
-  const state = {
-    packs: [],
-    packDetails: {},
-    scenarios: [],
-    selectedPackId: null,
-    selectedScenarioId: null,
-    driver: "engine",
-    lastRun: null,
+  /* =================================================================
+   * 1. UTILS
+   * ================================================================= */
+
+  const $  = (sel, root = document) => root.querySelector(sel);
+  const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+  const h  = (tag, attrs = {}, ...children) => {
+    const node = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs || {})) {
+      if (v === null || v === undefined || v === false) continue;
+      if (k === "class")        node.className = v;
+      else if (k === "html")    node.innerHTML = v;
+      else if (k === "text")    node.textContent = v;
+      else if (k === "style" && typeof v === "object") Object.assign(node.style, v);
+      else if (k.startsWith("on") && typeof v === "function") node.addEventListener(k.slice(2).toLowerCase(), v);
+      else if (k === "dataset" && typeof v === "object")      Object.entries(v).forEach(([dk, dv]) => { node.dataset[dk] = dv; });
+      else node.setAttribute(k, v);
+    }
+    for (const c of children) {
+      if (c === null || c === undefined || c === false) continue;
+      node.appendChild(c instanceof Node ? c : document.createTextNode(String(c)));
+    }
+    return node;
   };
-
-  const el = (id) => document.getElementById(id);
-  const qs = (sel, root = document) => root.querySelector(sel);
-  const qsa = (sel, root = document) => Array.from(root.querySelectorAll(sel));
-
-  function replaceIcons() {
-    if (window.lucide && typeof window.lucide.createIcons === "function") {
-      window.lucide.createIcons();
-    }
-  }
-
-  function toast(message, kind = "info") {
-    const stack = el("toast-stack");
-    if (!stack) return;
-    const node = document.createElement("div");
-    node.className = "toast";
-    node.dataset.kind = kind;
-    node.textContent = message;
-    stack.appendChild(node);
-    setTimeout(() => {
-      node.style.opacity = "0";
-      node.style.transition = "opacity 0.25s ease";
-      setTimeout(() => node.remove(), 300);
-    }, 3500);
-  }
-
-  async function fetchJson(url, init) {
-    const resp = await fetch(url, init);
-    if (!resp.ok) {
-      let detail = "";
-      try {
-        const body = await resp.json();
-        detail = body && body.detail ? ` — ${body.detail}` : "";
-      } catch (_) {
-        /* noop */
-      }
-      throw new Error(`${resp.status} ${resp.statusText}${detail}`);
-    }
-    return resp.json();
-  }
-
-  /* ---- Packs --------------------------------------------------- */
-
-  async function loadPacks() {
-    const grid = el("pack-grid");
-    grid.innerHTML = '<div class="pack-loading">Loading packs…</div>';
-    try {
-      state.packs = await fetchJson("/api/packs");
-    } catch (err) {
-      grid.innerHTML = `<div class="pack-loading">Failed to load packs: ${err.message}</div>`;
-      return;
-    }
-    el("stat-packs").textContent = state.packs.length;
-    renderPackGrid();
-  }
-
-  function renderPackGrid() {
-    const grid = el("pack-grid");
-    if (!state.packs.length) {
-      grid.innerHTML = '<div class="pack-loading">No packs loaded.</div>';
-      return;
-    }
-    grid.innerHTML = "";
-    state.packs.forEach((pack) => {
-      const card = document.createElement("div");
-      card.className = "pack-card";
-      if (state.selectedPackId === pack.id) card.classList.add("active");
-      card.dataset.packId = pack.id;
-      card.innerHTML = `
-        <div class="pack-title">${escapeHtml(pack.id)}</div>
-        <div class="pack-action">${escapeHtml(pack.action)}</div>
-        <div class="pack-desc">${escapeHtml(pack.description || "")}</div>
-        <div class="pack-meta">
-          <span class="pack-chip">${pack.pre_count} pre</span>
-          <span class="pack-chip">${pack.constraint_count} constraint</span>
-          <span class="pack-chip">${pack.post_count} post</span>
-        </div>
-      `;
-      card.addEventListener("click", () => selectPack(pack.id));
-      grid.appendChild(card);
-    });
-  }
-
-  async function selectPack(packId) {
-    state.selectedPackId = packId;
-    renderPackGrid();
-    try {
-      if (!state.packDetails[packId]) {
-        state.packDetails[packId] = await fetchJson(
-          `/api/packs/${encodeURIComponent(packId)}`
-        );
-      }
-      renderPackDetail(state.packDetails[packId]);
-    } catch (err) {
-      toast(`Failed to load pack ${packId}: ${err.message}`, "error");
-    }
-  }
-
-  function renderPackDetail(pack) {
-    const host = el("pack-detail");
-    host.innerHTML = `
-      <div class="pack-detail-body">
-        <div class="pack-detail-head">
-          <div>
-            <h3>${escapeHtml(pack.id)}</h3>
-            <p>${escapeHtml(pack.description || "")}</p>
-          </div>
-          <span class="pack-chip">${escapeHtml(pack.action)}</span>
-        </div>
-        <pre class="yaml-view">${escapeHtml(renderPackYaml(pack))}</pre>
-      </div>
-    `;
-  }
-
-  function renderPackYaml(pack) {
-    /* Not a full YAML emitter — renders the pack dict as a compact,
-     * readable YAML-ish view. Good enough for the dashboard; the
-     * source of truth is the file in data/twenty/packs/. */
-    const lines = [];
-    lines.push(`id: ${pack.id}`);
-    lines.push(`action: ${pack.action}`);
-    if (pack.description) lines.push(`description: ${pack.description}`);
-    lines.push("");
-    const sections = [
-      ["pre_conditions", pack.pre_conditions],
-      ["constraints", pack.constraints],
-      ["post_conditions", pack.post_conditions],
-    ];
-    sections.forEach(([name, items]) => {
-      if (!items || !items.length) return;
-      lines.push(`${name}:`);
-      items.forEach((check) => {
-        lines.push(`  - id: ${check.id}`);
-        if (check.description) lines.push(`    description: ${check.description}`);
-        if (check.expression) lines.push(`    expression: ${check.expression}`);
-        if (check.operator) lines.push(`    operator: ${check.operator}`);
-        if (check.expected !== undefined)
-          lines.push(`    expected: ${JSON.stringify(check.expected)}`);
-        if (check.verdict_on_fail)
-          lines.push(`    verdict_on_fail: ${check.verdict_on_fail}`);
-        if (check.fail_reason) lines.push(`    fail_reason: ${check.fail_reason}`);
-      });
-      lines.push("");
-    });
-    return lines.join("\n");
-  }
-
-  /* ---- Scenarios ---------------------------------------------- */
-
-  async function loadScenarios() {
-    const grid = el("scenario-grid");
-    grid.innerHTML = '<div class="scenario-loading">Loading scenarios…</div>';
-    try {
-      state.scenarios = await fetchJson("/api/scenarios");
-    } catch (err) {
-      grid.innerHTML = `<div class="scenario-loading">Failed to load: ${err.message}</div>`;
-      return;
-    }
-    el("stat-scenarios").textContent = state.scenarios.length;
-    renderScenarioGrid();
-  }
-
-  function renderScenarioGrid() {
-    const grid = el("scenario-grid");
-    if (!state.scenarios.length) {
-      grid.innerHTML = '<div class="scenario-loading">No scenarios.</div>';
-      return;
-    }
-    grid.innerHTML = "";
-    state.scenarios.forEach((s) => {
-      const card = document.createElement("div");
-      card.className = "scenario-card";
-      if (state.selectedScenarioId === s.id) card.classList.add("active");
-      card.innerHTML = `
-        <div class="scenario-head">
-          <div class="scenario-name">${escapeHtml(s.id)}</div>
-          <span class="verdict-badge" data-verdict="${escapeHtml(
-            s.expected_verdict || "—"
-          )}">${escapeHtml(s.expected_verdict || "—")}</span>
-        </div>
-        <div class="scenario-pack">${escapeHtml(s.pack_id)} · ${escapeHtml(
-        s.action || ""
-      )}</div>
-      `;
-      card.addEventListener("click", () => runScenario(s.id));
-      grid.appendChild(card);
-    });
-  }
-
-  async function runScenario(scenarioId) {
-    state.selectedScenarioId = scenarioId;
-    renderScenarioGrid();
-    try {
-      const scenario = state.scenarios.find((s) => s.id === scenarioId);
-      if (scenario) selectPack(scenario.pack_id);
-    } catch (_) {
-      /* pack selection is best-effort */
-    }
-
-    showVerdictLoading(scenarioId);
-    try {
-      const driver = state.driver;
-      const result = await fetchJson(
-        `/api/scenarios/${encodeURIComponent(scenarioId)}/run?driver=${driver}`,
-        { method: "POST" }
-      );
-      state.lastRun = result;
-      renderVerdict(result);
-      loadAudit();
-      toast(
-        `${scenarioId} · ${result.decision.verdict}`,
-        verdictKind(result.decision.verdict)
-      );
-    } catch (err) {
-      renderVerdictError(scenarioId, err);
-      toast(`Run failed: ${err.message}`, "error");
-    }
-  }
-
-  function verdictKind(v) {
-    if (v === "ALLOW") return "success";
-    if (v === "BLOCK") return "error";
-    return "warn";
-  }
-
-  function showVerdictLoading(scenarioId) {
-    el("verdict-empty").hidden = true;
-    const detail = el("verdict-detail");
-    detail.hidden = false;
-    detail.innerHTML = `
-      <div class="verdict-head">
-        <span class="verdict-badge" data-verdict="—">Running…</span>
-        <div class="verdict-head-meta">${escapeHtml(scenarioId)}</div>
-      </div>
-      <p class="verdict-reason">Calling /api/scenarios/${escapeHtml(
-        scenarioId
-      )}/run…</p>
-    `;
-    replaceIcons();
-  }
-
-  function renderVerdictError(scenarioId, err) {
-    el("verdict-empty").hidden = true;
-    const detail = el("verdict-detail");
-    detail.hidden = false;
-    detail.innerHTML = `
-      <div class="verdict-head">
-        <span class="verdict-badge" data-verdict="BLOCK">Error</span>
-        <div class="verdict-head-meta">${escapeHtml(scenarioId)}</div>
-      </div>
-      <p class="verdict-reason">${escapeHtml(err.message)}</p>
-    `;
-  }
-
-  function renderVerdict(result) {
-    const decision = result.decision;
-    el("verdict-empty").hidden = true;
-    const detail = el("verdict-detail");
-    detail.hidden = false;
-
-    const expected = result.expected_verdict;
-    const matched = expected ? decision.verdict === expected : null;
-
-    const checksHtml = (decision.checks || [])
-      .map(
-        (c) => `
-      <div class="check-row" data-passed="${c.passed}">
-        <div class="check-mark">${c.passed ? "✓" : "✗"}</div>
-        <div class="check-body">
-          <span class="check-id">${escapeHtml(c.check_id)}</span>
-          <span class="check-kind">${escapeHtml(c.kind)}</span>
-          <div class="check-reason">${escapeHtml(c.reason || "")}</div>
-          ${
-            c.observed === null || c.observed === undefined
-              ? ""
-              : `<div class="check-observed">observed: ${escapeHtml(
-                  JSON.stringify(c.observed)
-                )}</div>`
-          }
-        </div>
-      </div>
-    `
-      )
-      .join("");
-
-    detail.innerHTML = `
-      <div class="verdict-head">
-        <span class="verdict-badge" data-verdict="${escapeHtml(
-          decision.verdict
-        )}">${escapeHtml(decision.verdict)}</span>
-        <div class="verdict-head-meta">
-          ${escapeHtml(decision.pack_id)}<br />
-          ${escapeHtml(decision.action)} · ${escapeHtml(decision.phase)}<br />
-          ${escapeHtml(decision.timestamp)}
-        </div>
-      </div>
-      <p class="verdict-reason">${escapeHtml(decision.primary_reason)}</p>
-      <div class="verdict-meta-grid">
-        <div class="verdict-meta">
-          <div class="verdict-meta-label">Driver</div>
-          <div class="verdict-meta-value">${escapeHtml(
-            result.driver || "engine"
-          )}</div>
-        </div>
-        <div class="verdict-meta">
-          <div class="verdict-meta-label">Scenario</div>
-          <div class="verdict-meta-value">${escapeHtml(
-            result.scenario_id
-          )}</div>
-        </div>
-        <div class="verdict-meta">
-          <div class="verdict-meta-label">Checks</div>
-          <div class="verdict-meta-value">${decision.checks.length}</div>
-        </div>
-      </div>
-      <div class="verdict-checks">${checksHtml || "<em>No checks recorded.</em>"}</div>
-      ${
-        expected
-          ? `<div class="verdict-expected ${
-              matched === null ? "" : matched ? "match" : "mismatch"
-            }">
-              Expected verdict: <strong>${escapeHtml(expected)}</strong>
-              ${
-                matched === null
-                  ? ""
-                  : matched
-                  ? "· ✓ matched"
-                  : "· ✗ differed"
-              }
-             </div>`
-          : ""
-      }
-    `;
-  }
-
-  /* ---- Audit -------------------------------------------------- */
-
-  async function loadAudit() {
-    const body = el("audit-body");
-    try {
-      const rows = await fetchJson("/api/audit?limit=50");
-      el("stat-audit").textContent = rows.length;
-      if (!rows.length) {
-        body.innerHTML =
-          '<tr><td colspan="6" class="audit-empty">No decisions yet — run a scenario.</td></tr>';
-        return;
-      }
-      body.innerHTML = rows
-        .map(
-          (r) => `
-        <tr>
-          <td>${escapeHtml(formatTime(r.timestamp))}</td>
-          <td>${escapeHtml(r.pack_id)}</td>
-          <td>${escapeHtml(r.action)}</td>
-          <td>${escapeHtml(r.phase)}</td>
-          <td><span class="verdict-badge" data-verdict="${escapeHtml(
-            r.verdict
-          )}">${escapeHtml(r.verdict)}</span></td>
-          <td>${escapeHtml(r.primary_reason || "")}</td>
-        </tr>
-      `
-        )
-        .join("");
-    } catch (err) {
-      body.innerHTML = `<tr><td colspan="6" class="audit-empty">Failed to load: ${escapeHtml(
-        err.message
-      )}</td></tr>`;
-    }
-  }
-
-  /* ---- Health ------------------------------------------------- */
-
-  async function loadHealth() {
-    const dot = qs(".health-dot");
-    const label = el("nav-health-label");
-    const stat = el("stat-gateway");
-    try {
-      const h = await fetchJson("/health");
-      dot.dataset.status = h.status === "ok" ? "ok" : "err";
-      label.textContent = `Gateway · ${h.status}`;
-      stat.textContent = h.status;
-    } catch (err) {
-      dot.dataset.status = "err";
-      label.textContent = "Gateway offline";
-      stat.textContent = "offline";
-    }
-  }
-
-  /* ---- Run all ------------------------------------------------ */
-
-  async function runAllScenarios() {
-    if (!state.scenarios.length) return;
-    toast(`Running ${state.scenarios.length} scenarios…`);
-    let pass = 0;
-    let fail = 0;
-    for (const s of state.scenarios) {
-      try {
-        const result = await fetchJson(
-          `/api/scenarios/${encodeURIComponent(s.id)}/run?driver=${state.driver}`,
-          { method: "POST" }
-        );
-        if (result.decision.verdict === s.expected_verdict) pass += 1;
-        else fail += 1;
-      } catch (_) {
-        fail += 1;
-      }
-    }
-    toast(`Run all: ${pass} matched · ${fail} differed`, fail ? "warn" : "success");
-    loadAudit();
-  }
-
-  /* ---- Utilities ---------------------------------------------- */
 
   function escapeHtml(v) {
     if (v === null || v === undefined) return "";
     return String(v)
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#39;");
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   }
 
-  function formatTime(iso) {
-    if (!iso) return "";
-    try {
-      const d = new Date(iso);
-      return d.toLocaleTimeString() + " " + d.toLocaleDateString();
-    } catch (_) {
-      return iso;
+  function fmtRelTime(iso) {
+    if (!iso) return "—";
+    const t = new Date(iso).getTime();
+    if (Number.isNaN(t)) return iso;
+    const delta = (Date.now() - t) / 1000;
+    if (delta < 5) return "just now";
+    if (delta < 60) return `${Math.floor(delta)}s ago`;
+    if (delta < 3600) return `${Math.floor(delta / 60)}m ago`;
+    if (delta < 86400) return `${Math.floor(delta / 3600)}h ago`;
+    if (delta < 86400 * 7) return `${Math.floor(delta / 86400)}d ago`;
+    return new Date(iso).toISOString().slice(0, 10);
+  }
+
+  function fmtAbsTime(iso) {
+    if (!iso) return "—";
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso;
+    return d.toISOString().replace("T", " ").replace(/\.\d+Z$/, "Z");
+  }
+
+  function fmtNum(n, opts = {}) {
+    if (n === null || n === undefined || Number.isNaN(n)) return "—";
+    const { unit = "", digits = 0 } = opts;
+    const num = Number(n);
+    const formatted = digits ? num.toFixed(digits) : Math.round(num).toLocaleString();
+    return unit ? `${formatted}${unit}` : formatted;
+  }
+
+  function fmtPct(n, digits = 0) {
+    if (n === null || n === undefined || Number.isNaN(n)) return "—";
+    return `${(Number(n) * 100).toFixed(digits)}%`;
+  }
+
+  function debounce(fn, ms) {
+    let t;
+    return function () {
+      clearTimeout(t);
+      const args = arguments;
+      const self = this;
+      t = setTimeout(() => fn.apply(self, args), ms);
+    };
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text);
     }
+    return new Promise((resolve, reject) => {
+      try {
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        ta.style.position = "fixed";
+        ta.style.left = "-9999px";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+        resolve();
+      } catch (e) { reject(e); }
+    });
   }
 
-  function bindControls() {
-    qsa('input[name="driver"]').forEach((input) => {
-      input.addEventListener("change", (e) => {
-        state.driver = e.target.value;
-        toast(`Driver: ${state.driver}`);
-      });
+  /* =================================================================
+   * 2. GLYPHS — inline SVG sprite (no CDN)
+   * ================================================================= */
+
+  const GLYPHS = {
+    activity:    '<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>',
+    bell:        '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path><path d="M10 21a2 2 0 0 0 4 0"></path>',
+    file:        '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline>',
+    layers:      '<polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline>',
+    plug:        '<path d="M9 2v6"></path><path d="M15 2v6"></path><path d="M6 8h12v4a6 6 0 0 1-6 6 6 6 0 0 1-6-6V8z"></path><path d="M12 18v4"></path>',
+    cog:         '<circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"></path>',
+    search:      '<circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>',
+    play:        '<polygon points="5 3 19 12 5 21 5 3"></polygon>',
+    download:    '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line>',
+    refresh:     '<polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>',
+    check:       '<polyline points="20 6 9 17 4 12"></polyline>',
+    x:           '<line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line>',
+    arrow_right: '<line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline>',
+    arrow_up:    '<line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline>',
+    arrow_down:  '<line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 19 5 12"></polyline>',
+    edit:        '<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>',
+    save:        '<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline>',
+    revert:      '<polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>',
+    eye:         '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>',
+    copy:        '<rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>',
+  };
+
+  function mountGlyphs() {
+    $$(".nav-glyph[data-glyph], .search-box .nav-glyph").forEach((el) => {
+      const name = el.dataset.glyph || "search";
+      el.innerHTML = svgIcon(name);
     });
+  }
 
-    el("refresh-audit").addEventListener("click", loadAudit);
-    el("run-all").addEventListener("click", runAllScenarios);
+  function svgIcon(name, size = 16) {
+    const body = GLYPHS[name] || GLYPHS.search;
+    return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
+  }
 
-    qsa("[data-scroll]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const target = document.getElementById(btn.dataset.scroll);
-        if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
+  function inlineSvg(name) {
+    const tmp = document.createElement("span");
+    tmp.innerHTML = svgIcon(name);
+    return tmp.firstChild;
+  }
+
+  /* =================================================================
+   * 3. TOAST
+   * ================================================================= */
+
+  function toast(message, kind = "info", ttl = 3000) {
+    const stack = $("#toast-stack");
+    if (!stack) return;
+    const node = h("div", { class: "toast", dataset: { kind } }, message);
+    stack.appendChild(node);
+    setTimeout(() => {
+      node.style.transition = "opacity 0.25s ease, transform 0.25s ease";
+      node.style.opacity = "0";
+      node.style.transform = "translateX(8px)";
+      setTimeout(() => node.remove(), 280);
+    }, ttl);
+  }
+
+  /* =================================================================
+   * 4. DRAWER
+   * ================================================================= */
+
+  const drawer = {
+    el: null,
+    scrim: null,
+    onClose: null,
+    init() {
+      this.el = $("#drawer");
+      this.scrim = $("#drawer-scrim");
+      $("#drawer-close").addEventListener("click", () => this.close());
+      this.scrim.addEventListener("click", () => this.close());
+    },
+    open(opts) {
+      const { verdict, title, body, foot, onClose } = opts;
+      $("#drawer-verdict").textContent = verdict || "—";
+      $("#drawer-verdict").setAttribute("data-v", verdict || "—");
+      $("#drawer-title").textContent = title || "";
+      const bodyEl = $("#drawer-body"); bodyEl.innerHTML = ""; if (body) bodyEl.appendChild(body);
+      const footEl = $("#drawer-foot"); footEl.innerHTML = ""; if (foot) footEl.appendChild(foot);
+      this.el.dataset.open = "true";
+      this.scrim.dataset.open = "true";
+      this.el.setAttribute("aria-hidden", "false");
+      this.onClose = onClose || null;
+    },
+    close() {
+      this.el.dataset.open = "false";
+      this.scrim.dataset.open = "false";
+      this.el.setAttribute("aria-hidden", "true");
+      const cb = this.onClose; this.onClose = null;
+      if (typeof cb === "function") cb();
+    },
+    isOpen() { return this.el && this.el.dataset.open === "true"; },
+  };
+
+  /* =================================================================
+   * 5. COMMAND PALETTE
+   * ================================================================= */
+
+  const palette = {
+    el: null,
+    scrim: null,
+    input: null,
+    list: null,
+    items: [],
+    filtered: [],
+    selected: 0,
+    init() {
+      this.el = $("#palette");
+      this.scrim = $("#palette-scrim");
+      this.input = $("#palette-input");
+      this.list = $("#palette-list");
+      $("#palette-open").addEventListener("click", () => this.open());
+      this.scrim.addEventListener("click", () => this.close());
+      this.input.addEventListener("input", () => this.filter());
+      this.input.addEventListener("keydown", (e) => this.onKey(e));
+    },
+    open() {
+      this.items = api.paletteItems();
+      this.input.value = "";
+      this.selected = 0;
+      this.filter();
+      this.el.dataset.open = "true";
+      this.scrim.dataset.open = "true";
+      setTimeout(() => this.input.focus(), 40);
+    },
+    close() {
+      this.el.dataset.open = "false";
+      this.scrim.dataset.open = "false";
+    },
+    isOpen() { return this.el && this.el.dataset.open === "true"; },
+    filter() {
+      const q = this.input.value.trim().toLowerCase();
+      this.filtered = q
+        ? this.items.filter((it) => (it.label + " " + (it.kind || "")).toLowerCase().includes(q))
+        : this.items;
+      this.selected = 0;
+      this.render();
+    },
+    render() {
+      this.list.innerHTML = "";
+      if (!this.filtered.length) {
+        this.list.appendChild(h("li", { class: "palette-item" }, h("span", { style: { color: "var(--ink-4)" } }, "No matches.")));
+        return;
+      }
+      this.filtered.slice(0, 20).forEach((it, i) => {
+        const node = h("li", {
+          class: "palette-item",
+          role: "option",
+          "aria-selected": i === this.selected ? "true" : "false",
+          onClick: () => { this.choose(it); },
+        }, it.label, h("span", { class: "palette-kind" }, it.kind));
+        this.list.appendChild(node);
       });
-    });
+    },
+    move(delta) {
+      if (!this.filtered.length) return;
+      this.selected = (this.selected + delta + this.filtered.length) % this.filtered.length;
+      this.render();
+      const target = this.list.children[this.selected];
+      if (target && target.scrollIntoView) target.scrollIntoView({ block: "nearest" });
+    },
+    choose(item) {
+      this.close();
+      if (item && item.href) location.hash = item.href;
+    },
+    onKey(e) {
+      if (e.key === "ArrowDown")    { e.preventDefault(); this.move(1); }
+      else if (e.key === "ArrowUp") { e.preventDefault(); this.move(-1); }
+      else if (e.key === "Enter")   { e.preventDefault(); this.choose(this.filtered[this.selected]); }
+      else if (e.key === "Escape")  { this.close(); }
+    },
+  };
 
-    const copyBtn = el("copy-snippet");
-    if (copyBtn) {
-      copyBtn.addEventListener("click", async () => {
-        const snippet = el("inject-snippet").textContent.trim();
+  /* =================================================================
+   * 6. API
+   * ================================================================= */
+
+  const api = {
+    _cache: {},
+
+    async fetchJson(url, init) {
+      const resp = await fetch(url, init);
+      if (!resp.ok) {
+        let detail = "";
         try {
-          await navigator.clipboard.writeText(snippet);
-          toast("SDK snippet copied to clipboard", "success");
-        } catch (_) {
-          toast("Copy failed — select the snippet and Cmd/Ctrl+C", "warn");
-        }
-      });
-    }
+          const body = await resp.json();
+          if (body && body.detail) detail = ` — ${body.detail}`;
+        } catch (_) { /* noop */ }
+        throw new Error(`${resp.status} ${resp.statusText}${detail}`);
+      }
+      const ct = resp.headers.get("content-type") || "";
+      if (ct.includes("application/json")) return resp.json();
+      return resp.text();
+    },
 
-    const bookmarkletBtn = el("open-bookmarklet");
-    if (bookmarkletBtn) {
-      bookmarkletBtn.addEventListener("click", () => {
-        document.getElementById("twenty").scrollIntoView({ behavior: "smooth" });
+    health()      { return this.fetchJson("/health"); },
+    packs()       { return this.fetchJson("/api/packs"); },
+    pack(id)      { return this.fetchJson(`/api/packs/${encodeURIComponent(id)}`); },
+    packYaml(id)  { return this.fetchJson(`/api/packs/${encodeURIComponent(id)}/yaml`); },
+    savePack(id, yamlText) {
+      return this.fetchJson(`/api/packs/${encodeURIComponent(id)}/yaml`, {
+        method: "PUT",
+        headers: { "Content-Type": "text/plain" },
+        body: yamlText,
       });
+    },
+    packVersions(id) { return this.fetchJson(`/api/packs/${encodeURIComponent(id)}/versions`); },
+    revertPack(id, version) {
+      return this.fetchJson(`/api/packs/${encodeURIComponent(id)}/revert`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ version }),
+      });
+    },
+    scenarios()   { return this.fetchJson("/api/scenarios"); },
+    scenario(id)  { return this.fetchJson(`/api/scenarios/${encodeURIComponent(id)}`); },
+    runScenario(id, driver = "engine") {
+      return this.fetchJson(`/api/scenarios/${encodeURIComponent(id)}/run?driver=${driver}`, { method: "POST" });
+    },
+    audit(limit = 100) { return this.fetchJson(`/api/audit?limit=${limit}`); },
+    auditSearch(params) {
+      const qs = new URLSearchParams();
+      for (const [k, v] of Object.entries(params || {})) if (v !== undefined && v !== null && v !== "") qs.set(k, v);
+      const q = qs.toString();
+      return this.fetchJson(`/api/audit/search${q ? "?" + q : ""}`);
+    },
+    auditExportUrl(params) {
+      const qs = new URLSearchParams();
+      for (const [k, v] of Object.entries(params || {})) if (v !== undefined && v !== null && v !== "") qs.set(k, v);
+      const q = qs.toString();
+      return `/api/audit/export.csv${q ? "?" + q : ""}`;
+    },
+    metricsLive() { return this.fetchJson("/api/metrics/live"); },
+    escalations() { return this.fetchJson("/api/escalations"); },
+    approveEscalation(id, comment) {
+      return this.fetchJson(`/api/escalations/${id}/approve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ comment: comment || "" }),
+      });
+    },
+    denyEscalation(id, comment) {
+      return this.fetchJson(`/api/escalations/${id}/deny`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ comment: comment || "" }),
+      });
+    },
+
+    paletteItems() {
+      const items = [
+        { label: "Live", href: "#/live", kind: "view" },
+        { label: "Escalations", href: "#/escalations", kind: "view" },
+        { label: "Action Packs", href: "#/packs", kind: "view" },
+        { label: "Audit Ledger", href: "#/audit", kind: "view" },
+        { label: "Integrations", href: "#/integrations", kind: "view" },
+        { label: "Settings", href: "#/settings", kind: "view" },
+      ];
+      (state.packs || []).forEach((p) => items.push({ label: p.id, href: `#/packs/${encodeURIComponent(p.id)}`, kind: "pack" }));
+      (state.scenarios || []).forEach((s) => items.push({ label: s.id, href: `#/packs/${encodeURIComponent(s.pack_id)}?run=${encodeURIComponent(s.id)}`, kind: "scenario" }));
+      return items;
+    },
+  };
+
+  /* =================================================================
+   * 7. ROUTER + STATE
+   * ================================================================= */
+
+  const state = {
+    packs: [],
+    scenarios: [],
+    health: null,
+    audit: [],          // last 100 from /api/audit
+    metrics: null,
+    escalations: [],
+    driver: "engine",
+    lastView: null,
+  };
+
+  function parseHash() {
+    const raw = (location.hash || "#/live").replace(/^#\/?/, "");
+    const [pathPart, queryPart] = raw.split("?");
+    const segs = pathPart.split("/").filter(Boolean);
+    const route = segs[0] || "live";
+    const params = {};
+    if (queryPart) {
+      for (const pair of queryPart.split("&")) {
+        const [k, v] = pair.split("=");
+        if (k) params[decodeURIComponent(k)] = v ? decodeURIComponent(v) : "";
+      }
+    }
+    return { route, segs, params };
+  }
+
+  function setQuery(updates, opts = {}) {
+    const { route, segs, params } = parseHash();
+    const next = { ...params };
+    for (const [k, v] of Object.entries(updates)) {
+      if (v === null || v === undefined || v === "") delete next[k];
+      else next[k] = v;
+    }
+    const path = "#/" + segs.join("/");
+    const qs = Object.entries(next).map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join("&");
+    const target = qs ? `${path}?${qs}` : path;
+    if (opts.replace) history.replaceState(null, "", target);
+    else location.hash = target;
+  }
+
+  const routes = {}; // route name -> render function
+
+  async function dispatch() {
+    const { route, segs, params } = parseHash();
+    const root = $("#view-root");
+    if (!root) return;
+    state.lastView = route;
+    $$(".nav-item").forEach((el) => {
+      el.toggleAttribute("aria-current", el.dataset.route === route);
+      if (el.dataset.route === route) el.setAttribute("aria-current", "page");
+      else el.removeAttribute("aria-current");
+    });
+    root.innerHTML = "";
+    const fn = routes[route] || routes.live;
+    try {
+      await fn(root, segs, params);
+    } catch (err) {
+      console.error("[route]", route, err);
+      root.appendChild(renderError(err));
     }
   }
 
-  function updateFoot() {
-    const footTime = el("foot-time");
-    if (footTime) {
-      footTime.textContent = new Date().toLocaleString();
+  function renderError(err) {
+    return h("div", { class: "view" },
+      h("div", { class: "empty" },
+        h("h3", {}, "Something went wrong"),
+        h("p", {}, err && err.message ? err.message : String(err)),
+        h("button", { class: "btn", onClick: dispatch }, "Retry")
+      )
+    );
+  }
+
+  /* =================================================================
+   * 8. VIEWS
+   * ================================================================= */
+
+  /* ---- 8.1 LIVE -------------------------------------------------- */
+
+  routes.live = async function (root, _segs, params) {
+    const view = h("div", { class: "view" });
+    root.appendChild(view);
+
+    view.appendChild(h("div", { class: "view-head" },
+      h("div", {},
+        h("h1", { class: "view-title" }, "Live"),
+        h("p", { class: "view-sub" }, "Verdicts streaming in from the gateway. Click any row to see the policy that fired and the full decision JSON.")
+      ),
+      h("div", { class: "view-actions" },
+        h("button", { class: "btn btn-ghost", id: "live-refresh", onClick: () => loadLive() },
+          inlineSvg("refresh"), " Refresh")
+      )
+    ));
+
+    const tileRow = h("div", { class: "tile-row", id: "tile-row" });
+    tileRow.appendChild(tileSkeleton("Verdicts · last hour"));
+    tileRow.appendChild(tileSkeleton("Block rate"));
+    tileRow.appendChild(tileSkeleton("p95 latency"));
+    tileRow.appendChild(tileSkeleton("Escalations pending"));
+    view.appendChild(tileRow);
+
+    const filterBar = h("div", { class: "filterbar" });
+    const searchInput = h("input", {
+      class: "input", type: "search", placeholder: "Search reason text…", value: params.q || "",
+      oninput: debounce((e) => { setQuery({ q: e.target.value }, { replace: true }); renderFeed(); }, 200),
+    });
+    const verdictChips = h("div", { class: "chips" });
+    ["ALLOW", "BLOCK", "ESCALATE"].forEach((v) => {
+      const pressed = (params.v || "").split(",").includes(v);
+      verdictChips.appendChild(h("button", {
+        class: "chip", "aria-pressed": pressed ? "true" : "false", dataset: { v },
+        onClick: () => {
+          const cur = (params.v || "").split(",").filter(Boolean);
+          const i = cur.indexOf(v);
+          if (i >= 0) cur.splice(i, 1); else cur.push(v);
+          setQuery({ v: cur.join(",") }, { replace: true });
+          renderFeed();
+        },
+      }, v));
+    });
+    const packSelect = h("select", { class: "select", style: { width: "auto", maxWidth: 220 } });
+    packSelect.appendChild(h("option", { value: "" }, "All packs"));
+    (state.packs || []).forEach((p) => packSelect.appendChild(h("option", { value: p.id }, p.id)));
+    packSelect.value = params.pack || "";
+    packSelect.addEventListener("change", (e) => { setQuery({ pack: e.target.value }, { replace: true }); renderFeed(); });
+
+    filterBar.appendChild(searchInput);
+    filterBar.appendChild(packSelect);
+    filterBar.appendChild(verdictChips);
+    view.appendChild(filterBar);
+
+    const feed = h("div", { class: "feed", id: "feed" });
+    feed.appendChild(feedSkeleton());
+    view.appendChild(feed);
+
+    async function loadLive() {
+      try {
+        const [audit, metrics] = await Promise.all([api.audit(100), api.metricsLive().catch(() => null)]);
+        state.audit = audit;
+        state.metrics = metrics;
+        renderTiles();
+        renderFeed();
+      } catch (err) {
+        feed.innerHTML = "";
+        feed.appendChild(h("div", { class: "empty" },
+          h("h3", {}, "Couldn't load verdicts"),
+          h("p", {}, err.message),
+          h("button", { class: "btn", onClick: loadLive }, "Retry"),
+        ));
+      }
     }
+
+    function renderTiles() {
+      const m = state.metrics || {};
+      tileRow.innerHTML = "";
+      tileRow.appendChild(tile({
+        label: "Verdicts · last hour",
+        value: fmtNum(m.verdicts_1h),
+        unit: "",
+        sparkline: m.verdicts_24h_buckets,
+      }));
+      tileRow.appendChild(tile({
+        label: "Block rate · 1h",
+        value: fmtPct(m.block_rate_1h, 0),
+        delta: m.block_rate_delta,
+        deltaFormat: "pct",
+      }));
+      tileRow.appendChild(tile({
+        label: "p95 latency",
+        value: fmtNum(m.latency_p95_ms),
+        unit: "ms",
+      }));
+      tileRow.appendChild(tile({
+        label: "Escalations pending",
+        value: fmtNum(m.escalations_pending),
+        link: "#/escalations",
+        emphasis: (m.escalations_pending || 0) > 0,
+      }));
+    }
+
+    function renderFeed() {
+      const params2 = parseHash().params;
+      const verdictFilter = (params2.v || "").split(",").filter(Boolean);
+      const packFilter = params2.pack || "";
+      const q = (params2.q || "").trim().toLowerCase();
+
+      const rows = (state.audit || []).filter((r) => {
+        if (verdictFilter.length && !verdictFilter.includes(r.verdict)) return false;
+        if (packFilter && r.pack_id !== packFilter) return false;
+        if (q && !(r.primary_reason || "").toLowerCase().includes(q) && !(r.pack_id || "").toLowerCase().includes(q)) return false;
+        return true;
+      });
+
+      feed.innerHTML = "";
+      if (!rows.length) {
+        feed.appendChild(h("div", { class: "empty" },
+          h("h3", {}, state.audit.length ? "No verdicts match these filters" : "No verdicts yet"),
+          h("p", {}, state.audit.length
+            ? "Loosen the filters above, or clear them with Esc."
+            : "Take any action in Twenty with the SDK installed, or run a scenario from Action Packs."),
+        ));
+        return;
+      }
+
+      rows.forEach((r, idx) => {
+        const row = h("div", {
+          class: "feed-row",
+          role: "button",
+          tabindex: "0",
+          dataset: { id: r.id },
+          onClick: () => openVerdictDrawer(r),
+          onKeydown: (e) => { if (e.key === "Enter") openVerdictDrawer(r); },
+        },
+          h("span", { class: "feed-time", title: r.timestamp || "" }, fmtRelTime(r.timestamp)),
+          h("div", { class: "feed-main" },
+            h("div", { class: "feed-pack" }, r.pack_id, " · ", h("span", { style: { color: "var(--ink-3)" } }, r.action || "")),
+            h("div", { class: "feed-reason" }, r.primary_reason || ""),
+          ),
+          h("div", { class: "feed-end" },
+            h("span", { class: "verdict", dataset: { v: r.verdict } }, r.verdict)
+          ),
+        );
+        if (idx === 0 && r.id === state._lastTopId) row.dataset.new = "true";
+        feed.appendChild(row);
+      });
+    }
+
+    await loadLive();
+    state._loadLive = loadLive;
+  };
+
+  function tileSkeleton(label) {
+    return h("div", { class: "tile" },
+      h("div", { class: "tile-label" }, label),
+      h("div", { class: "sk", style: { height: "28px", width: "60%" } }),
+      h("div", { class: "sk tile-spark", style: { height: "26px", width: "100%" } }),
+    );
+  }
+
+  function tile({ label, value, unit, delta, deltaFormat, sparkline, link, emphasis }) {
+    const wrap = h("div", { class: "tile" });
+    if (link) { wrap.style.cursor = "pointer"; wrap.addEventListener("click", () => { location.hash = link; }); }
+    wrap.appendChild(h("div", { class: "tile-label" }, label));
+    const valueRow = h("div", { class: "tile-row-2" },
+      h("div", {
+        class: "tile-value",
+        style: emphasis ? { color: "var(--escalate)" } : null,
+      }, value),
+      unit ? h("span", { class: "tile-unit" }, unit) : null,
+    );
+    if (typeof delta === "number" && !Number.isNaN(delta)) {
+      const dir = Math.abs(delta) < 0.005 ? "flat" : delta > 0 ? "up" : "down";
+      let txt;
+      if (deltaFormat === "pct") txt = (delta > 0 ? "+" : "") + (delta * 100).toFixed(1) + "pp";
+      else txt = (delta > 0 ? "+" : "") + delta;
+      valueRow.appendChild(h("span", { class: "tile-delta", dataset: { dir } }, txt));
+    }
+    wrap.appendChild(valueRow);
+    if (sparkline && sparkline.length) wrap.appendChild(sparklineEl(sparkline));
+    else wrap.appendChild(h("div", { class: "tile-spark" }));
+    return wrap;
+  }
+
+  function sparklineEl(buckets) {
+    const wrap = h("div", { class: "tile-spark" });
+    const maxV = Math.max(1, ...buckets);
+    const w = 160, hgt = 26;
+    const step = buckets.length > 1 ? w / (buckets.length - 1) : 0;
+    const points = buckets.map((v, i) => `${(i * step).toFixed(1)},${(hgt - (v / maxV) * (hgt - 2) - 1).toFixed(1)}`).join(" ");
+    wrap.innerHTML = `<svg viewBox="0 0 ${w} ${hgt}" preserveAspectRatio="none"><polyline points="${points}" fill="none" stroke="var(--ink-3)" stroke-width="1.5" /></svg>`;
+    return wrap;
+  }
+
+  function feedSkeleton(rows = 8) {
+    const wrap = h("div");
+    for (let i = 0; i < rows; i++) {
+      wrap.appendChild(h("div", { class: "sk-row" },
+        h("span", { class: "sk" }),
+        h("span", { class: "sk" }),
+        h("span", { class: "sk" }),
+      ));
+    }
+    return wrap;
+  }
+
+  /* ---- 8.2 VERDICT DRAWER (shared) ------------------------------ */
+
+  async function openVerdictDrawer(row) {
+    const verdict = row.verdict || row.decision?.verdict || "—";
+    const decision = row.decision || row;
+    const body = h("div");
+
+    body.appendChild(h("div", { class: "drawer-section" },
+      h("div", { class: "drawer-section-label" }, "Primary reason"),
+      h("p", { style: { margin: 0, fontSize: "var(--fs-15)", color: "var(--ink-0)" } }, row.primary_reason || decision.primary_reason || "—"),
+    ));
+
+    const meta = h("dl", { class: "meta-grid" });
+    meta.appendChild(h("dt", {}, "Pack"));     meta.appendChild(h("dd", {}, row.pack_id || decision.pack_id || "—"));
+    meta.appendChild(h("dt", {}, "Action"));   meta.appendChild(h("dd", {}, row.action || decision.action || "—"));
+    meta.appendChild(h("dt", {}, "Phase"));    meta.appendChild(h("dd", {}, row.phase || decision.phase || "—"));
+    meta.appendChild(h("dt", {}, "Time"));     meta.appendChild(h("dd", { class: "is-ui" }, fmtRelTime(row.timestamp), " · ", h("span", { style: { color: "var(--ink-4)" } }, fmtAbsTime(row.timestamp))));
+    if (row.id != null) { meta.appendChild(h("dt", {}, "Audit ID")); meta.appendChild(h("dd", {}, "#" + row.id)); }
+    body.appendChild(h("div", { class: "drawer-section" }, meta));
+
+    const checks = (decision.checks || []);
+    if (checks.length) {
+      const list = h("div", { class: "check-list" });
+      checks.forEach((c) => {
+        list.appendChild(h("div", { class: "check-item", dataset: { passed: c.passed ? "true" : "false" } },
+          h("div", { class: "check-mark" }, c.passed ? "✓" : "✗"),
+          h("div", { class: "check-body" },
+            h("span", { class: "check-id" }, c.check_id),
+            h("span", { class: "check-kind" }, c.kind),
+            c.reason ? h("div", { class: "check-reason" }, c.reason) : null,
+            c.observed !== null && c.observed !== undefined
+              ? h("div", { class: "check-observed" }, "observed: " + JSON.stringify(c.observed))
+              : null,
+          ),
+        ));
+      });
+      body.appendChild(h("div", { class: "drawer-section" },
+        h("div", { class: "drawer-section-label" }, "Checks (" + checks.length + ")"),
+        list,
+      ));
+    }
+
+    // Pack snippet
+    const packId = row.pack_id || decision.pack_id;
+    if (packId) {
+      const ySection = h("div", { class: "drawer-section" },
+        h("div", { class: "drawer-section-label" }, "Policy"),
+        h("div", { class: "sk", style: { height: "120px" } }),
+      );
+      body.appendChild(ySection);
+
+      const failingCheckId = (checks.find((c) => !c.passed) || {}).check_id;
+      api.packYaml(packId).then((res) => {
+        const yaml = typeof res === "string" ? res : (res && res.yaml) || "";
+        ySection.innerHTML = "";
+        ySection.appendChild(h("div", { class: "drawer-section-label" }, "Policy · " + packId));
+        const pre = h("pre", { class: "yaml-block" });
+        pre.innerHTML = highlightYaml(yaml, failingCheckId);
+        ySection.appendChild(pre);
+        // Auto-scroll to highlighted line
+        const hl = pre.querySelector(".hl");
+        if (hl) hl.scrollIntoView({ block: "center" });
+      }).catch((err) => {
+        ySection.innerHTML = "";
+        ySection.appendChild(h("div", { class: "drawer-section-label" }, "Policy"));
+        ySection.appendChild(h("p", { style: { fontSize: "var(--fs-12)", color: "var(--ink-3)" } }, "Couldn't load YAML: " + err.message));
+      });
+    }
+
+    // Raw JSON, collapsed
+    const details = h("details", { class: "drawer-section" },
+      h("summary", { style: { cursor: "pointer", fontSize: "var(--fs-12)", color: "var(--ink-3)" } }, "Decision JSON"),
+      h("pre", { class: "json-block", style: { marginTop: "8px" } }, JSON.stringify(decision, null, 2)),
+    );
+    body.appendChild(details);
+
+    const foot = h("div");
+    if (packId) {
+      foot.appendChild(h("button", { class: "btn btn-ghost", onClick: () => { drawer.close(); location.hash = `#/packs/${encodeURIComponent(packId)}`; } },
+        inlineSvg("file"), " Open pack"));
+    }
+    if (row.id != null) {
+      foot.appendChild(h("button", { class: "btn btn-ghost", onClick: () => { drawer.close(); location.hash = `#/audit?id=${row.id}`; } },
+        inlineSvg("layers"), " View in audit"));
+    }
+
+    drawer.open({ verdict, title: row.pack_id || decision.pack_id || "Verdict", body, foot });
+  }
+
+  function highlightYaml(yaml, highlightCheckId) {
+    const lines = String(yaml || "").split("\n");
+    const escapedId = highlightCheckId ? escapeHtml(highlightCheckId) : null;
+    let highlightLine = -1;
+    if (escapedId) {
+      for (let i = 0; i < lines.length; i++) {
+        if (/^\s*-\s*id:\s*/.test(lines[i]) && lines[i].includes(highlightCheckId)) {
+          highlightLine = i;
+          break;
+        }
+      }
+    }
+    return lines.map((raw, i) => {
+      let line = escapeHtml(raw);
+      // simple tokenizer (post-escape, no re-escaping needed)
+      line = line
+        .replace(/(#.*)$/, '<span class="com">$1</span>')
+        .replace(/^(\s*)([A-Za-z_][A-Za-z0-9_]*)(:)/, '$1<span class="key">$2</span>$3')
+        .replace(/(:\s*)(&quot;[^&]*&quot;|&#39;[^&]*&#39;)/g, '$1<span class="str">$2</span>')
+        .replace(/(:\s*)(true|false)\b/g, '$1<span class="bool">$2</span>')
+        .replace(/(:\s*)(-?\d+(?:\.\d+)?)\b/g, '$1<span class="num">$2</span>');
+      if (i >= highlightLine && highlightLine >= 0) {
+        // highlight the rule and the following indented lines until next list item or section
+        const indent = (lines[highlightLine].match(/^\s*/) || [""])[0].length;
+        const cur = (raw.match(/^\s*/) || [""])[0].length;
+        if (i === highlightLine || (cur > indent && raw.trim() !== "" && !raw.match(/^\s*-\s/))) {
+          return `<span class="hl">${line}</span>`;
+        }
+      }
+      return line;
+    }).join("\n");
+  }
+
+  /* ---- 8.3 ESCALATIONS ------------------------------------------ */
+
+  routes.escalations = async function (root) {
+    const view = h("div", { class: "view" });
+    root.appendChild(view);
+    view.appendChild(h("div", { class: "view-head" },
+      h("div", {},
+        h("h1", { class: "view-title" }, "Escalations"),
+        h("p", { class: "view-sub" }, "Verdicts that need a human decision. Approve to retry the action; deny to keep the block."),
+      ),
+      h("div", { class: "view-actions" },
+        h("button", { class: "btn btn-ghost", onClick: () => loadEscalations() }, inlineSvg("refresh"), " Refresh"),
+      ),
+    ));
+
+    const list = h("div", { id: "esc-list" });
+    list.appendChild(h("div", { class: "sk", style: { height: "120px", borderRadius: "10px" } }));
+    view.appendChild(list);
+
+    async function loadEscalations() {
+      try {
+        state.escalations = await api.escalations();
+        renderList();
+        updateBadge();
+      } catch (err) {
+        list.innerHTML = "";
+        list.appendChild(renderError(err).firstChild);
+      }
+    }
+
+    function renderList() {
+      list.innerHTML = "";
+      if (!state.escalations.length) {
+        list.appendChild(h("div", { class: "empty" },
+          h("h3", {}, "Nothing pending"),
+          h("p", {}, "When the gateway escalates an action, it shows up here for a human decision."),
+        ));
+        return;
+      }
+      state.escalations.forEach((e) => list.appendChild(renderEscalationCard(e, loadEscalations)));
+    }
+
+    await loadEscalations();
+  };
+
+  function renderEscalationCard(e, onChange) {
+    const card = h("div", { class: "esc-card" });
+    const left = h("div");
+    left.appendChild(h("div", { class: "esc-meta" },
+      h("span", { class: "verdict", dataset: { v: "ESCALATE" } }, "ESCALATE"),
+      h("span", { class: "esc-pack" }, e.pack_id),
+      h("span", {}, e.action || ""),
+      h("span", { style: { color: "var(--ink-4)" } }, fmtRelTime(e.timestamp)),
+    ));
+    left.appendChild(h("div", { class: "esc-reason" }, e.primary_reason || ""));
+
+    const diff = h("div", { class: "esc-diff" },
+      h("div", {},
+        h("div", { class: "label" }, "Current state"),
+        h("pre", { style: { margin: "6px 0 0", whiteSpace: "pre-wrap" } }, JSON.stringify(e.current_state || e.ui_state || {}, null, 2).slice(0, 600)),
+      ),
+      h("div", {},
+        h("div", { class: "label" }, "Proposed action"),
+        h("pre", { style: { margin: "6px 0 0", whiteSpace: "pre-wrap" } }, JSON.stringify(e.proposed || { action: e.action }, null, 2).slice(0, 600)),
+      ),
+    );
+    left.appendChild(diff);
+    card.appendChild(left);
+
+    const actions = h("div", { class: "esc-actions" });
+    actions.appendChild(h("button", {
+      class: "btn btn-primary",
+      onClick: async () => {
+        const c = prompt("Optional comment for the audit trail:") || "";
+        try { await api.approveEscalation(e.id, c); toast("Approved · executed", "success"); onChange && onChange(); }
+        catch (err) { toast(err.message, "error"); }
+      },
+    }, inlineSvg("check"), " Approve"));
+    actions.appendChild(h("button", {
+      class: "btn btn-danger",
+      onClick: async () => {
+        const c = prompt("Optional comment for the audit trail:") || "";
+        try { await api.denyEscalation(e.id, c); toast("Denied · blocked", "warn"); onChange && onChange(); }
+        catch (err) { toast(err.message, "error"); }
+      },
+    }, inlineSvg("x"), " Deny"));
+    actions.appendChild(h("button", {
+      class: "btn btn-ghost",
+      onClick: () => openVerdictDrawer({
+        id: e.id, timestamp: e.timestamp, pack_id: e.pack_id, action: e.action,
+        phase: e.phase, verdict: "ESCALATE", primary_reason: e.primary_reason, decision: e.decision,
+      }),
+    }, inlineSvg("eye"), " Details"));
+    card.appendChild(actions);
+    return card;
+  }
+
+  /* ---- 8.4 PACKS ------------------------------------------------- */
+
+  routes.packs = async function (root, segs, params) {
+    const packId = segs[1] ? decodeURIComponent(segs[1]) : null;
+
+    const view = h("div", { class: "view" });
+    root.appendChild(view);
+    view.appendChild(h("div", { class: "view-head" },
+      h("div", {},
+        h("h1", { class: "view-title" }, "Action Packs"),
+        h("p", { class: "view-sub" }, "YAML behavioural contracts the gateway enforces. Edit a pack to change runtime policy without redeploying."),
+      ),
+    ));
+
+    if (!state.packs.length) {
+      try { state.packs = await api.packs(); } catch (err) {
+        view.appendChild(renderError(err)); return;
+      }
+    }
+
+    const grid = h("div", { class: "packs-grid" });
+    view.appendChild(grid);
+
+    const sideList = h("div", { class: "pack-list" });
+    const search = h("div", { class: "pack-list-search" },
+      h("input", {
+        class: "input", type: "search", placeholder: "Filter packs…", value: params.q || "",
+        oninput: debounce((e) => { setQuery({ q: e.target.value }, { replace: true }); renderSide(); }, 150),
+      }),
+    );
+    sideList.appendChild(search);
+    grid.appendChild(sideList);
+
+    const detail = h("div", { class: "pack-detail-card" });
+    grid.appendChild(detail);
+
+    function renderSide() {
+      $$(".pack-list-item", sideList).forEach((el) => el.remove());
+      const q = (parseHash().params.q || "").toLowerCase();
+      const filtered = state.packs.filter((p) => !q || p.id.toLowerCase().includes(q) || (p.description || "").toLowerCase().includes(q));
+      filtered.forEach((p) => {
+        const item = h("a", {
+          class: "pack-list-item",
+          href: `#/packs/${encodeURIComponent(p.id)}`,
+          "aria-current": packId === p.id ? "true" : "false",
+        },
+          h("div", { class: "pack-list-id" }, p.id),
+          h("div", { class: "pack-list-meta" }, `${p.check_count} checks · ${p.action}`),
+        );
+        sideList.appendChild(item);
+      });
+    }
+
+    async function renderDetail() {
+      detail.innerHTML = "";
+      if (!packId) {
+        detail.appendChild(h("div", { class: "empty" },
+          h("h3", {}, "Select a pack"),
+          h("p", {}, "Pick a pack from the list to view or edit the policy."),
+        ));
+        return;
+      }
+      const pack = state.packs.find((p) => p.id === packId);
+      if (!pack) {
+        detail.appendChild(h("div", { class: "empty" },
+          h("h3", {}, "Pack not found"),
+          h("p", {}, packId),
+        ));
+        return;
+      }
+
+      const head = h("div", { class: "pack-detail-head" },
+        h("div", { style: { minWidth: 0 } },
+          h("div", { class: "pack-detail-id" }, pack.id),
+          h("div", { class: "pack-detail-action" }, "Action: ", h("code", {}, pack.action)),
+          h("p", { class: "pack-detail-desc" }, (pack.description || "").trim()),
+          h("div", { class: "pack-versions", id: "pack-versions" }, "Loading versions…"),
+        ),
+        h("div", { class: "view-actions" },
+          h("button", { class: "btn btn-ghost", id: "btn-edit", onClick: () => toggleEdit(true) }, inlineSvg("edit"), " Edit"),
+          h("button", { class: "btn btn-primary", id: "btn-save", style: { display: "none" }, onClick: save }, inlineSvg("save"), " Save"),
+          h("button", { class: "btn btn-ghost", id: "btn-cancel", style: { display: "none" }, onClick: () => toggleEdit(false) }, "Cancel"),
+        ),
+      );
+      detail.appendChild(head);
+
+      // YAML viewer/editor
+      const yamlHost = h("div", { class: "pack-yaml-host" });
+      const viewerPre = h("pre", { class: "yaml-block", id: "yaml-view", style: { margin: 0, maxHeight: "520px" } });
+      const editor = h("textarea", { id: "yaml-edit", spellcheck: "false", style: { display: "none" } });
+      yamlHost.appendChild(viewerPre);
+      yamlHost.appendChild(editor);
+      detail.appendChild(yamlHost);
+
+      let originalYaml = "";
+      try {
+        const res = await api.packYaml(pack.id);
+        originalYaml = typeof res === "string" ? res : (res.yaml || "");
+        viewerPre.innerHTML = highlightYaml(originalYaml);
+        editor.value = originalYaml;
+      } catch (err) {
+        viewerPre.textContent = "Couldn't load YAML: " + err.message;
+      }
+
+      try {
+        const versions = await api.packVersions(pack.id);
+        const v = $("#pack-versions");
+        v.innerHTML = "";
+        v.appendChild(h("span", {}, "Versions:"));
+        (versions || []).forEach((ver) => {
+          v.appendChild(h("span", { class: "pack-version-tag", title: ver.timestamp || "" }, ver.label || ver.version));
+        });
+        if (!versions || !versions.length) v.appendChild(h("span", { class: "pack-version-tag" }, "v1 · current"));
+      } catch (_) {
+        const v = $("#pack-versions");
+        v.innerHTML = "";
+        v.appendChild(h("span", { class: "pack-version-tag" }, "v1 · current"));
+      }
+
+      // Attached scenarios + last verdict
+      const sScenarios = (state.scenarios || []).filter((s) => s.pack_id === pack.id);
+      if (sScenarios.length) {
+        const scWrap = h("div", { class: "pack-scenarios" });
+        scWrap.appendChild(h("h4", {}, "Regression scenarios"));
+        sScenarios.forEach((s) => {
+          const row = h("div", { class: "pack-scenario-row" },
+            h("div", { class: "name" }, s.id),
+            h("span", { class: "verdict", dataset: { v: s.expected_verdict || "—" } }, "expects ", s.expected_verdict || "—"),
+            h("button", {
+              class: "btn btn-sm", onClick: async () => {
+                row.dataset.running = "true";
+                try {
+                  const r = await api.runScenario(s.id, "engine");
+                  const matched = r.decision.verdict === s.expected_verdict;
+                  toast(`${s.id} · ${r.decision.verdict} ${matched ? "(match)" : "(differs)"}`, matched ? "success" : "warn");
+                  if (state._loadLive) await state._loadLive();
+                } catch (err) { toast(err.message, "error"); }
+                delete row.dataset.running;
+              },
+            }, inlineSvg("play"), " Run"),
+          );
+          scWrap.appendChild(row);
+        });
+        detail.appendChild(scWrap);
+      }
+
+      function toggleEdit(on) {
+        viewerPre.style.display = on ? "none" : "block";
+        editor.style.display = on ? "block" : "none";
+        $("#btn-edit").style.display = on ? "none" : "";
+        $("#btn-save").style.display = on ? "" : "none";
+        $("#btn-cancel").style.display = on ? "" : "none";
+        if (!on) editor.value = originalYaml;
+        else editor.focus();
+      }
+
+      async function save() {
+        const newYaml = editor.value;
+        if (newYaml === originalYaml) {
+          toast("No changes to save.");
+          toggleEdit(false);
+          return;
+        }
+        try {
+          await api.savePack(pack.id, newYaml);
+          originalYaml = newYaml;
+          viewerPre.innerHTML = highlightYaml(newYaml);
+          toggleEdit(false);
+          toast("Pack saved · live now.", "success");
+          // Refresh versions
+          api.packVersions(pack.id).then((versions) => {
+            const v = $("#pack-versions");
+            v.innerHTML = "";
+            v.appendChild(h("span", {}, "Versions:"));
+            (versions || []).forEach((ver) => v.appendChild(h("span", { class: "pack-version-tag" }, ver.label || ver.version)));
+          }).catch(() => {});
+        } catch (err) {
+          toast("Save failed: " + err.message, "error");
+        }
+      }
+
+      // Auto-run from palette ?run=
+      const runId = parseHash().params.run;
+      if (runId) {
+        const s = sScenarios.find((x) => x.id === runId);
+        if (s) {
+          api.runScenario(s.id, "engine").then((r) => {
+            toast(`${s.id} · ${r.decision.verdict}`);
+            if (state._loadLive) state._loadLive();
+          }).catch((err) => toast(err.message, "error"));
+          setQuery({ run: null }, { replace: true });
+        }
+      }
+    }
+
+    renderSide();
+    await renderDetail();
+  };
+
+  /* ---- 8.5 AUDIT LEDGER ----------------------------------------- */
+
+  routes.audit = async function (root, _segs, params) {
+    const view = h("div", { class: "view view-wide" });
+    root.appendChild(view);
+
+    view.appendChild(h("div", { class: "view-head" },
+      h("div", {},
+        h("h1", { class: "view-title" }, "Audit Ledger"),
+        h("p", { class: "view-sub" }, "Immutable record of every decision the gateway has made. Filterable, exportable, shareable by URL."),
+      ),
+      h("div", { class: "view-actions" },
+        h("a", { class: "btn", id: "export-btn", href: "#", download: "coco-audit.csv" }, inlineSvg("download"), " Export CSV"),
+        h("button", { class: "btn btn-ghost", onClick: () => loadAudit() }, inlineSvg("refresh"), " Refresh"),
+      ),
+    ));
+
+    const fb = h("div", { class: "filterbar" });
+    const qInput = h("input", { class: "input", type: "search", placeholder: "Search reason text…", value: params.q || "",
+      oninput: debounce((e) => { setQuery({ q: e.target.value }, { replace: true }); loadAudit(); }, 250),
+    });
+    fb.appendChild(qInput);
+
+    const packSel = h("select", { class: "select", style: { width: "auto", maxWidth: 220 } });
+    packSel.appendChild(h("option", { value: "" }, "All packs"));
+    (state.packs || []).forEach((p) => packSel.appendChild(h("option", { value: p.id }, p.id)));
+    packSel.value = params.pack || "";
+    packSel.addEventListener("change", (e) => { setQuery({ pack: e.target.value }, { replace: true }); loadAudit(); });
+    fb.appendChild(packSel);
+
+    const verdictChips = h("div", { class: "chips" });
+    ["ALLOW", "BLOCK", "ESCALATE"].forEach((v) => {
+      const pressed = (params.v || "").split(",").includes(v);
+      verdictChips.appendChild(h("button", {
+        class: "chip", "aria-pressed": pressed ? "true" : "false", dataset: { v },
+        onClick: () => {
+          const cur = (parseHash().params.v || "").split(",").filter(Boolean);
+          const i = cur.indexOf(v);
+          if (i >= 0) cur.splice(i, 1); else cur.push(v);
+          setQuery({ v: cur.join(",") }, { replace: true });
+          loadAudit();
+        },
+      }, v));
+    });
+    fb.appendChild(verdictChips);
+
+    const fromInput = h("input", { class: "input", type: "date", style: { width: 150 }, value: params.from || "",
+      onchange: (e) => { setQuery({ from: e.target.value }, { replace: true }); loadAudit(); } });
+    const toInput = h("input", { class: "input", type: "date", style: { width: 150 }, value: params.to || "",
+      onchange: (e) => { setQuery({ to: e.target.value }, { replace: true }); loadAudit(); } });
+    fb.appendChild(h("span", { style: { fontSize: "var(--fs-12)", color: "var(--ink-3)" } }, "from"));
+    fb.appendChild(fromInput);
+    fb.appendChild(h("span", { style: { fontSize: "var(--fs-12)", color: "var(--ink-3)" } }, "to"));
+    fb.appendChild(toInput);
+    view.appendChild(fb);
+
+    const wrap = h("div", { class: "table-wrap" });
+    const table = h("table", { class: "t" },
+      h("thead", {}, h("tr", {},
+        h("th", {}, "Time"),
+        h("th", {}, "Pack"),
+        h("th", {}, "Action"),
+        h("th", {}, "Phase"),
+        h("th", {}, "Verdict"),
+        h("th", {}, "Primary reason"),
+      )),
+      h("tbody", { id: "audit-body" }, h("tr", {}, h("td", { colspan: 6 }, "Loading…"))),
+    );
+    wrap.appendChild(table);
+    view.appendChild(wrap);
+
+    const meta = h("div", { style: { marginTop: "var(--s-3)", fontSize: "var(--fs-12)", color: "var(--ink-3)" }, id: "audit-meta" }, "");
+    view.appendChild(meta);
+
+    async function loadAudit() {
+      const p = parseHash().params;
+      $("#export-btn").href = api.auditExportUrl(p);
+      try {
+        const rows = await api.auditSearch(p);
+        renderRows(rows);
+      } catch (err) {
+        // Fallback: client-side filter on /api/audit
+        const rows = await api.audit(500);
+        const filtered = rows.filter((r) => {
+          const vs = (p.v || "").split(",").filter(Boolean);
+          if (vs.length && !vs.includes(r.verdict)) return false;
+          if (p.pack && r.pack_id !== p.pack) return false;
+          if (p.q && !(r.primary_reason || "").toLowerCase().includes(p.q.toLowerCase())) return false;
+          if (p.from && r.timestamp < p.from) return false;
+          if (p.to && r.timestamp > p.to + "T23:59:59Z") return false;
+          return true;
+        });
+        renderRows(filtered);
+      }
+    }
+
+    function renderRows(rows) {
+      const body = $("#audit-body");
+      body.innerHTML = "";
+      if (!rows.length) {
+        body.appendChild(h("tr", {}, h("td", { colspan: 6 }, h("div", { class: "empty" },
+          h("h3", {}, "No matching rows"),
+          h("p", {}, "Loosen the filters or clear them."),
+        ))));
+        meta.textContent = "";
+        return;
+      }
+      rows.forEach((r) => {
+        body.appendChild(h("tr", {
+          onClick: () => openVerdictDrawer(r),
+          dataset: { id: r.id },
+        },
+          h("td", { class: "ui" }, fmtRelTime(r.timestamp)),
+          h("td", {}, r.pack_id),
+          h("td", { class: "ui" }, r.action),
+          h("td", {}, r.phase),
+          h("td", { class: "ui" }, h("span", { class: "verdict", dataset: { v: r.verdict } }, r.verdict)),
+          h("td", { class: "ui" }, r.primary_reason || ""),
+        ));
+      });
+      const packs = new Set(rows.map((r) => r.pack_id));
+      meta.textContent = `${rows.length.toLocaleString()} rows · ${packs.size} packs`;
+
+      // Deep-link: ?id=N opens drawer
+      const focusId = parseHash().params.id;
+      if (focusId) {
+        const r = rows.find((x) => String(x.id) === String(focusId));
+        if (r) openVerdictDrawer(r);
+      }
+    }
+
+    await loadAudit();
+  };
+
+  /* ---- 8.6 INTEGRATIONS ----------------------------------------- */
+
+  routes.integrations = async function (root) {
+    const view = h("div", { class: "view" });
+    root.appendChild(view);
+    view.appendChild(h("div", { class: "view-head" },
+      h("div", {},
+        h("h1", { class: "view-title" }, "Integrations"),
+        h("p", { class: "view-sub" }, "Connect the SaaS apps you want governed, install the SDK, and Coco starts watching."),
+      ),
+      h("div", { class: "view-actions" },
+        h("a", { class: "btn btn-primary", href: "/sandbox/twenty", target: "_blank" },
+          inlineSvg("play"), " Try the overlay"),
+      ),
+    ));
+
+    const origin = location.origin;
+    const sdkSnippet = `<script src="${origin}/sdk/coco-sdk.js"></script>\n<script src="${origin}/sdk/inject.js" data-gateway="${origin}"></script>`;
+    const bookmarkletJs = `javascript:(function(){var s=document.createElement('script');s.src='${origin}/sdk/coco-sdk.js?b='+Date.now();document.body.appendChild(s);var t=document.createElement('script');t.src='${origin}/sdk/inject.js?b='+Date.now();t.dataset.gateway='${origin}';document.body.appendChild(t);})();`;
+
+    const grid = h("div", { class: "integration-grid" });
+    view.appendChild(grid);
+
+    // --- Twenty card ---
+    const twenty = h("div", { class: "card integration-card" });
+    twenty.appendChild(h("div", { class: "head" },
+      h("div", { class: "name" }, "Twenty CRM"),
+      h("span", { class: "status", id: "twenty-status", "data-on": "false" }, "Checking…"),
+    ));
+    twenty.appendChild(h("p", { style: { color: "var(--ink-2)", margin: 0, fontSize: "var(--fs-13)" } },
+      "Open-source CRM. Coco governs deal moves, contact deletes, bulk email, opportunities, and field updates."));
+
+    const twentyForm = h("div", { style: { display: "flex", flexDirection: "column", gap: "var(--s-2)" } });
+    twentyForm.appendChild(h("label", { style: { fontSize: "var(--fs-12)", color: "var(--ink-3)" } }, "Base URL"));
+    twentyForm.appendChild(h("input", { class: "input input-mono", id: "twenty-base", placeholder: "http://localhost:3000", value: localStorage.getItem("coco.twenty.base") || "http://localhost:3000" }));
+    twentyForm.appendChild(h("label", { style: { fontSize: "var(--fs-12)", color: "var(--ink-3)" } }, "API key"));
+    twentyForm.appendChild(h("input", { class: "input input-mono", id: "twenty-key", placeholder: "eyJhbGciOi…", type: "password", value: localStorage.getItem("coco.twenty.key") || "" }));
+    twentyForm.appendChild(h("div", { style: { display: "flex", gap: "var(--s-2)" } },
+      h("button", { class: "btn", onClick: testTwenty }, inlineSvg("check"), " Test connection"),
+      h("button", { class: "btn btn-ghost", onClick: () => { localStorage.setItem("coco.twenty.base", $("#twenty-base").value); localStorage.setItem("coco.twenty.key", $("#twenty-key").value); toast("Saved locally."); } }, inlineSvg("save"), " Save"),
+    ));
+    twenty.appendChild(twentyForm);
+    grid.appendChild(twenty);
+
+    async function testTwenty() {
+      const status = $("#twenty-status");
+      status.textContent = "Testing…"; status.dataset.on = "false";
+      const base = $("#twenty-base").value.replace(/\/$/, "");
+      const key  = $("#twenty-key").value;
+      if (!base || !key) { status.textContent = "Missing creds"; return; }
+      try {
+        const r = await fetch(`${base}/rest/companies?limit=1`, { headers: { Authorization: "Bearer " + key } });
+        if (r.ok) { status.textContent = "Connected"; status.dataset.on = "true"; toast("Twenty reachable.", "success"); }
+        else { status.textContent = `HTTP ${r.status}`; toast(`Twenty returned ${r.status}`, "error"); }
+      } catch (err) { status.textContent = "Unreachable"; toast(err.message, "error"); }
+    }
+
+    // Initial status check
+    const sBase = $("#twenty-base").value; const sKey = $("#twenty-key").value;
+    if (sBase && sKey) testTwenty();
+    else $("#twenty-status").textContent = "Not configured";
+
+    // --- SDK install card ---
+    const sdk = h("div", { class: "card integration-card" });
+    sdk.appendChild(h("div", { class: "head" },
+      h("div", { class: "name" }, "JavaScript SDK"),
+      h("span", { class: "status", "data-on": "true" }, "Available"),
+    ));
+    sdk.appendChild(h("p", { style: { color: "var(--ink-2)", margin: 0, fontSize: "var(--fs-13)" } },
+      "Drop this snippet into your SaaS frontend. Every governed action then asks Coco first."));
+    const code = h("div", { class: "code-block" });
+    code.textContent = sdkSnippet;
+    code.appendChild(h("button", { class: "copy", onClick: () => copyToClipboard(sdkSnippet).then(() => toast("Snippet copied.", "success")) }, "copy"));
+    sdk.appendChild(code);
+
+    const bookmarkletWrap = h("div", { style: { marginTop: "var(--s-2)", display: "flex", alignItems: "center", gap: "var(--s-3)", flexWrap: "wrap" } });
+    const blink = document.createElement("a");
+    blink.className = "bookmarklet-pill";
+    blink.href = bookmarkletJs;
+    blink.textContent = "🐈‍⬛ Coco · drag me";
+    blink.addEventListener("click", (e) => e.preventDefault());
+    bookmarkletWrap.appendChild(blink);
+    bookmarkletWrap.appendChild(h("span", { style: { fontSize: "var(--fs-12)", color: "var(--ink-3)", flex: "1", minWidth: "200px" } },
+      "Drag to your bookmarks bar. Click while on Twenty to inject the SDK without redeploying."));
+    sdk.appendChild(bookmarkletWrap);
+
+    const sandboxNote = h("div", {
+      style: {
+        marginTop: "var(--s-3)",
+        padding: "10px 12px",
+        background: "var(--accent-soft)",
+        border: "1px solid var(--accent-line)",
+        borderRadius: "var(--r-md)",
+        fontSize: "var(--fs-12)",
+        color: "var(--accent-ink)",
+        display: "flex",
+        alignItems: "center",
+        gap: "var(--s-2)",
+      },
+    },
+      h("strong", {}, "No Twenty handy?"),
+      " Open the ",
+      h("a", { href: "/sandbox/twenty", target: "_blank", style: { color: "var(--accent-ink)", textDecoration: "underline", fontWeight: 600 } }, "built-in sandbox"),
+      " to try the overlay — same SDK, same gateway, same verdicts.",
+    );
+    sdk.appendChild(sandboxNote);
+    grid.appendChild(sdk);
+
+    // --- Gateway card ---
+    const gw = h("div", { class: "card integration-card" });
+    gw.appendChild(h("div", { class: "head" },
+      h("div", { class: "name" }, "Coco Gateway"),
+      h("span", { class: "status", "data-on": "true" }, state.health && state.health.status === "ok" ? "Healthy" : "Unknown"),
+    ));
+    gw.appendChild(h("p", { style: { color: "var(--ink-2)", margin: 0, fontSize: "var(--fs-13)" } },
+      "FastAPI service running at " + origin + ". 5 packs loaded, SQLite audit log under data/runtime/audit.db."));
+    gw.appendChild(h("div", { style: { fontFamily: "var(--font-mono)", fontSize: "var(--fs-11)", color: "var(--ink-3)" } },
+      "Endpoints: /api/validate · /api/packs · /api/scenarios · /api/audit · /api/metrics/live · /api/escalations"));
+    grid.appendChild(gw);
+  };
+
+  /* ---- 8.7 SETTINGS --------------------------------------------- */
+
+  routes.settings = async function (root) {
+    const view = h("div", { class: "view" });
+    root.appendChild(view);
+    view.appendChild(h("div", { class: "view-head" },
+      h("div", {},
+        h("h1", { class: "view-title" }, "Settings"),
+        h("p", { class: "view-sub" }, "Workspace, environment, audit retention. Persisted to local storage for now; production-grade settings land in the backend later."),
+      ),
+    ));
+
+    const card = h("div", { class: "card" });
+    const body = h("div", { class: "card-body" });
+    const get = (k, d) => localStorage.getItem("coco.settings." + k) || d;
+    const set = (k, v) => localStorage.setItem("coco.settings." + k, v);
+
+    function field(label, key, type = "text", placeholder = "") {
+      const id = "f-" + key;
+      return h("div", { style: { marginBottom: "var(--s-4)" } },
+        h("label", { for: id, style: { display: "block", fontSize: "var(--fs-12)", color: "var(--ink-3)", marginBottom: 4 } }, label),
+        h("input", { class: "input", id, type, placeholder, value: get(key, ""),
+          onchange: (e) => { set(key, e.target.value); toast("Saved.", "success"); },
+        }),
+      );
+    }
+
+    body.appendChild(field("Workspace name", "workspace_name", "text", "Acme Corp"));
+    body.appendChild(field("Environment", "environment", "text", "development / staging / production"));
+    body.appendChild(field("Audit retention (days)", "retention_days", "number", "365"));
+    body.appendChild(field("Operator email (for escalation alerts)", "operator_email", "email", "ops@acme.com"));
+
+    card.appendChild(body);
+    view.appendChild(card);
+  };
+
+  /* ---- 8.8 ONBOARDING (first-run cue) -------------------------- */
+
+  routes.onboarding = async function (root) {
+    const view = h("div", { class: "view" });
+    root.appendChild(view);
+    view.appendChild(h("div", { class: "view-head" },
+      h("div", {},
+        h("h1", { class: "view-title" }, "Welcome to Coco"),
+        h("p", { class: "view-sub" }, "Four steps to governed AI actions. Takes about five minutes."),
+      ),
+    ));
+
+    const wrap = h("div", { class: "onboarding" });
+    const steps = [
+      { num: 1, title: "Gateway is up", body: "Your Coco gateway is running and ready. 5 default Twenty CRM packs are loaded.", done: true },
+      { num: 2, title: "Connect Twenty CRM", body: "Paste your Twenty base URL and API key on the Integrations page so the gateway can read live state.", done: !!localStorage.getItem("coco.twenty.key") },
+      { num: 3, title: "Install the SDK in Twenty", body: "Drag the Coco bookmarklet into your bookmarks bar, then click it while on Twenty. Or paste the script tag into a production deployment.", done: false },
+      { num: 4, title: "Watch the first verdict", body: "Take any governed action in Twenty. The verdict streams into Live. Done.", done: state.audit && state.audit.length > 0 },
+    ];
+
+    const activeIdx = steps.findIndex((s) => !s.done);
+    steps.forEach((s, i) => {
+      wrap.appendChild(h("div", { class: "onboarding-step", dataset: { done: s.done ? "true" : "false", active: i === activeIdx ? "true" : "false" } },
+        h("div", { class: "onboarding-num" }, s.done ? "✓" : String(s.num)),
+        h("div", {},
+          h("h3", { class: "onboarding-title" }, s.title),
+          h("p", { class: "onboarding-body" }, s.body),
+          i === 1 ? h("a", { class: "btn", href: "#/integrations" }, "Open Integrations ", inlineSvg("arrow_right")) : null,
+          i === 2 ? h("a", { class: "btn", href: "#/integrations" }, "Get the bookmarklet ", inlineSvg("arrow_right")) : null,
+          i === 3 ? h("a", { class: "btn", href: "#/live" }, "Open Live ", inlineSvg("arrow_right")) : null,
+        ),
+      ));
+    });
+
+    view.appendChild(wrap);
+  };
+
+  /* =================================================================
+   * 9. BOOTSTRAP
+   * ================================================================= */
+
+  function updateClock() {
+    const c = $("#foot-clock");
+    if (c) c.textContent = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
+
+  async function refreshHealth() {
+    try {
+      const h2 = await api.health();
+      state.health = h2;
+      $(".health-dot").dataset.status = h2.status === "ok" ? "ok" : "err";
+      $("#health-label").textContent = `Gateway · ${h2.status} · ${h2.packs_loaded} packs`;
+    } catch (_) {
+      state.health = { status: "err" };
+      $(".health-dot").dataset.status = "err";
+      $("#health-label").textContent = "Gateway offline";
+    }
+  }
+
+  async function refreshEscalationBadge() {
+    try {
+      const ex = await api.escalations().catch(() => []);
+      state.escalations = ex || [];
+    } catch (_) { state.escalations = []; }
+    updateBadge();
+  }
+  function updateBadge() {
+    const b = $("#badge-escalations");
+    if (!b) return;
+    b.textContent = String(state.escalations.length || 0);
+    b.dataset.empty = state.escalations.length === 0 ? "true" : "false";
+  }
+
+  async function pollLive() {
+    // Light poll: refresh audit + metrics + escalation badge if user is on Live.
+    if (state.lastView === "live") {
+      try {
+        const [audit, metrics] = await Promise.all([api.audit(100), api.metricsLive().catch(() => null)]);
+        const topId = audit && audit[0] && audit[0].id;
+        if (topId && topId !== state._lastTopId) {
+          state._lastTopId = topId;
+        }
+        state.audit = audit;
+        state.metrics = metrics;
+        if (state._loadLive) {
+          // refresh the live view's renderers in place
+          // simpler: call dispatch only if filters didn't change drastically
+        }
+      } catch (_) {}
+    }
+    refreshEscalationBadge();
+  }
+
+  function bindGlobalKeys() {
+    document.addEventListener("keydown", (e) => {
+      // Cmd/Ctrl-K
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        palette.open();
+        return;
+      }
+      if (e.key === "Escape") {
+        if (palette.isOpen()) palette.close();
+        else if (drawer.isOpen()) drawer.close();
+        return;
+      }
+      const t = e.target;
+      const inField = t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || (t.isContentEditable));
+      if (inField) return;
+      if (e.key === "/") { e.preventDefault(); palette.open(); }
+      // j/k on Live view → move feed selection.
+      if (state.lastView === "live" && (e.key === "j" || e.key === "k")) {
+        moveFeedSelection(e.key === "j" ? 1 : -1);
+        e.preventDefault();
+      }
+      if (state.lastView === "live" && e.key === "Enter") {
+        const sel = $(".feed-row[aria-selected='true']");
+        if (sel) sel.click();
+      }
+    });
+  }
+
+  function moveFeedSelection(delta) {
+    const rows = $$(".feed-row");
+    if (!rows.length) return;
+    let idx = rows.findIndex((r) => r.getAttribute("aria-selected") === "true");
+    if (idx < 0) idx = delta > 0 ? -1 : rows.length;
+    idx = Math.max(0, Math.min(rows.length - 1, idx + delta));
+    rows.forEach((r, i) => r.setAttribute("aria-selected", i === idx ? "true" : "false"));
+    rows[idx].scrollIntoView({ block: "nearest" });
+  }
+
+  function rerenderFeedTimes() {
+    // Lightweight tick: refresh "Nm ago" labels without reloading data.
+    $$(".feed-row").forEach((r) => {
+      const t = r.querySelector(".feed-time");
+      if (!t) return;
+      const iso = t.title;
+      if (iso) t.textContent = fmtRelTime(iso);
+    });
   }
 
   async function init() {
-    bindControls();
-    updateFoot();
-    replaceIcons();
-    await Promise.all([loadHealth(), loadPacks(), loadScenarios(), loadAudit()]);
-    replaceIcons();
+    drawer.init();
+    palette.init();
+    mountGlyphs();
+    bindGlobalKeys();
+    updateClock();
+    setInterval(updateClock, 30 * 1000);
+
+    window.addEventListener("hashchange", dispatch);
+    window.addEventListener("popstate", dispatch);
+
+    // Initial parallel data load
+    await Promise.all([
+      refreshHealth(),
+      api.packs().then((p) => { state.packs = p; }).catch(() => { state.packs = []; }),
+      api.scenarios().then((s) => { state.scenarios = s; }).catch(() => { state.scenarios = []; }),
+      refreshEscalationBadge(),
+    ]);
+
+    if (!location.hash) location.hash = "#/live";
+    await dispatch();
+
+    setInterval(refreshHealth, 15 * 1000);
+    setInterval(pollLive, 5 * 1000);
+    setInterval(rerenderFeedTimes, 30 * 1000);
   }
 
   if (document.readyState === "loading") {

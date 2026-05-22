@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Twenty CRM — Coco overlay sandbox</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --ink: #0f172a;
+      --ink-2: #334155;
+      --ink-3: #64748b;
+      --line: #e2e8f0;
+      --indigo: #4f46e5;
+      --indigo-2: #6366f1;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: "Inter", system-ui, sans-serif;
+      font-size: 14px;
+      line-height: 1.55;
+    }
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--line);
+      padding: 0 24px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .logo {
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: var(--indigo);
+      font-size: 16px;
+    }
+    .crumbs { color: var(--ink-3); font-size: 13px; }
+    .crumbs strong { color: var(--ink); font-weight: 600; }
+    .back {
+      margin-left: auto;
+      font-size: 12px;
+      color: var(--ink-3);
+      text-decoration: none;
+      padding: 6px 10px;
+      border-radius: 6px;
+    }
+    .back:hover { background: #f1f5f9; color: var(--ink); }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 220px 1fr;
+      min-height: calc(100vh - 56px);
+    }
+    aside {
+      background: var(--surface);
+      border-right: 1px solid var(--line);
+      padding: 14px;
+    }
+    aside .group { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-3); padding: 6px 8px; margin-top: 6px; font-weight: 600; }
+    aside ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 2px; }
+    aside li { padding: 6px 10px; border-radius: 6px; font-size: 13px; color: var(--ink-2); cursor: pointer; }
+    aside li:hover { background: #f1f5f9; }
+    aside li.active { background: #eef2ff; color: #3730a3; font-weight: 600; }
+
+    main { padding: 24px 32px 80px; }
+    .banner {
+      background: #eef2ff;
+      color: #3730a3;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      margin-bottom: 18px;
+      border: 1px solid #c7d2fe;
+    }
+    .banner strong { color: #1e1b4b; }
+    h1 { font-size: 22px; margin: 0 0 4px; }
+    .sub { color: var(--ink-3); font-size: 13px; margin-bottom: 20px; }
+
+    .record {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 20px 22px;
+      max-width: 720px;
+    }
+    .record h2 { font-size: 17px; margin: 0 0 12px; }
+    .row { display: flex; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+    .row:last-of-type { border-bottom: none; }
+    .row .k { width: 160px; color: var(--ink-3); font-size: 13px; }
+    .row .v { color: var(--ink); font-size: 13px; }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 2px 9px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 600;
+      background: #eef2ff;
+      color: #3730a3;
+    }
+
+    .actions { display: flex; gap: 8px; margin-top: 18px; flex-wrap: wrap; }
+    .btn {
+      background: #0f172a;
+      color: #fff;
+      border: 0;
+      padding: 9px 14px;
+      border-radius: 6px;
+      font: 600 13px "Inter", sans-serif;
+      cursor: pointer;
+    }
+    .btn:hover { background: #000; }
+    .btn-ghost {
+      background: #fff;
+      color: var(--ink);
+      border: 1px solid var(--line);
+    }
+    .btn-ghost:hover { border-color: var(--ink-3); }
+    .btn-danger {
+      background: #fff;
+      color: #b91c1c;
+      border: 1px solid #fecaca;
+    }
+    .btn-danger:hover { background: #fee2e2; border-color: #b91c1c; }
+
+    .legend {
+      margin-top: 28px;
+      padding: 14px 16px;
+      background: #fafafa;
+      border: 1px dashed var(--line);
+      border-radius: 8px;
+      font-size: 12px;
+      color: var(--ink-3);
+      max-width: 720px;
+    }
+    .legend strong { color: var(--ink); }
+    .legend code {
+      font-family: "JetBrains Mono", monospace;
+      background: #fff;
+      border: 1px solid var(--line);
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-size: 11px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <span class="logo">Twenty</span>
+    <span class="crumbs">Opportunities · <strong>Northwind Labs — Enterprise Trust Layer</strong></span>
+    <a class="back" href="/dashboard">← Back to Coco dashboard</a>
+  </header>
+
+  <div class="layout">
+    <aside>
+      <div class="group">Workspace</div>
+      <ul>
+        <li>Companies</li>
+        <li class="active">Opportunities</li>
+        <li>People</li>
+        <li>Tasks</li>
+        <li>Notes</li>
+      </ul>
+      <div class="group">Views</div>
+      <ul>
+        <li>All deals</li>
+        <li>Q2 pipeline</li>
+        <li>High-value</li>
+      </ul>
+    </aside>
+
+    <main>
+      <div class="banner">
+        <strong>Sandbox · this isn't real Twenty.</strong> The Coco overlay is injected so you can try the user-facing surface without standing up Twenty. Buttons below call the real gateway and write real audit rows.
+      </div>
+
+      <h1>Northwind Labs — Enterprise Trust Layer</h1>
+      <p class="sub">Opportunity #OPP-0421 · created 2026-04-18 by Ada Chen</p>
+
+      <div class="record">
+        <h2>Deal</h2>
+        <div class="row"><div class="k">Stage</div><div class="v" data-testid="record-detail-stage">NEW</div></div>
+        <div class="row"><div class="k">Amount</div><div class="v" data-testid="record-detail-amount">82,000</div></div>
+        <div class="row"><div class="k">Owner</div><div class="v" data-testid="record-detail-owner">u_002 · Ada Chen</div></div>
+        <div class="row"><div class="k">Prev-stage tasks</div><div class="v">All complete</div></div>
+        <div class="row"><div class="k">Manager field</div><div class="v"><span class="pill">empty</span></div></div>
+
+        <div class="actions">
+          <button class="btn" id="act-move-bad">Move stage NEW → NEGOTIATION (skip)</button>
+          <button class="btn-ghost btn" id="act-move-good">Move stage NEW → SCREENING</button>
+          <button class="btn-danger btn" id="act-delete">Delete contact</button>
+          <button class="btn-ghost btn" id="act-bulk">Send 80-recipient blast</button>
+        </div>
+      </div>
+
+      <div class="legend">
+        <strong>What each button does:</strong>
+        <ul style="margin: 6px 0 0 0; padding-left: 18px;">
+          <li><strong>Move stage NEW → NEGOTIATION (skip)</strong> — triggers <code>twenty.deal_stage_move</code>. Skipping screening violates a constraint → <strong>BLOCK</strong> with the firing-rule highlighted in the policy drawer.</li>
+          <li><strong>Move stage NEW → SCREENING</strong> — same pack, valid move → <strong>ALLOW</strong> (or <strong>ESCALATE</strong> if the deal is over $50K and the manager field is empty).</li>
+          <li><strong>Delete contact</strong> — triggers <code>twenty.contact_delete</code> → <strong>ALLOW</strong> (sandboxed contact has no open deals).</li>
+          <li><strong>Send 80-recipient blast</strong> — triggers <code>twenty.bulk_email</code>, exceeds the 50-recipient limit → <strong>BLOCK</strong>.</li>
+        </ul>
+        Every verdict streams into the dashboard's <a href="/dashboard#/live" target="_blank">Live</a> feed. BLOCK rows surface a modal here; click <em>See policy</em> on the modal to open the right-side drawer with the firing YAML rule highlighted in Coco purple.
+      </div>
+    </main>
+  </div>
+
+  <script>
+    // Sandbox button → SDK validate. Each button passes a hand-shaped ui_state
+    // that's guaranteed to land on a specific verdict so the demo is reliable.
+    function bindAction(id, action, packId, uiState) {
+      document.getElementById(id).addEventListener("click", () => {
+        if (!window.Coco) {
+          alert("Coco SDK not loaded yet — wait a second and retry.");
+          return;
+        }
+        window.Coco.validate(action, uiState, packId, "pre");
+      });
+    }
+    bindAction("act-move-bad", "move_stage", "twenty.deal_stage_move", {
+      deal: { owner: "u_002", amount: 82000, prev_stage_tasks_completed: true,
+              is_sequential_stage_move: false, manager_field_filled: false,
+              target_stage: "negotiation" },
+      user: { role: "sales" }
+    });
+    bindAction("act-move-good", "move_stage", "twenty.deal_stage_move", {
+      deal: { owner: "u_002", amount: 30000, prev_stage_tasks_completed: true,
+              is_sequential_stage_move: true, manager_field_filled: false,
+              target_stage: "screening" },
+      user: { role: "sales" }
+    });
+    bindAction("act-delete", "delete_contact", "twenty.contact_delete", {
+      contact: { open_opportunity_count: 0, days_since_modified: 60 },
+      user: { role: "admin" }
+    });
+    bindAction("act-bulk", "send_bulk_email", "twenty.bulk_email", {
+      email: { has_valid_recipient_list: true, recipient_count: 80,
+               has_flagged_recipient: false, activity_logged_for_all: true }
+    });
+  </script>
+  <!-- Coco SDK + overlay, served by the gateway itself -->
+  <script src="/sdk/coco-sdk.js"></script>
+  <script src="/sdk/inject.js" data-gateway=""></script>
+</body>
+</html>

@@ -1,172 +1,148 @@
-# Coco Trust Layer — Team Demo Walkthrough
+# Product walkthrough
 
-A 7-minute live click-through. Run this in a team huddle once the gateway
-is up and (optionally) Twenty is up. No slides needed — the dashboard is
-the slide deck.
+This doc walks through the Trust Layer the way a real user touches it.
+Six journeys, written from each user's point of view. Each step lists
+the input the user gives and the response the product returns.
 
-## Before the call — 2-minute setup
+The walkthrough doubles as product docs and as a recording outline.
+
+## Surfaces
+
+- **Dashboard.** `http://localhost:8080/dashboard`. Where admins,
+  policy authors and auditors work.
+- **Twenty CRM overlay.** Small badge, modal and drawer injected into a
+  Twenty tab by the SDK or bookmarklet. Where end users see Coco.
+
+## Pre-flight
+
+Gateway up in tmux:
 
 ```bash
-cd /mnt/khoa/coco/coco-trust-layer
-
-# 1. Gateway in tmux
-tmux new-session -d -s coco_demo -c $PWD
-tmux send-keys -t coco_demo \
-  'conda activate coco && PYTHONPATH=$PWD uvicorn main:app --app-dir backend --host 0.0.0.0 --port 8080' Enter
+tmux new-session -d -s coco_gateway -c /mnt/khoa/coco/coco-trust-layer
+tmux send-keys -t coco_gateway \
+  'conda activate coco && PYTHONPATH=$PWD COCO_ALLOW_DEMO_RESET=1 uvicorn main:app --app-dir backend --host 0.0.0.0 --port 8080' Enter
 sleep 3
-curl -s localhost:8080/health | jq    # expect status: ok, packs_loaded: 5
-
-# 2. (Optional) Twenty — skip if first-time setup would eat the clock
-bash scripts/setup_twenty.sh          # ~60s first time
-export TWENTY_API_KEY="..."
-python scripts/seed_twenty.py
-
-# 3. Open two browser tabs
-open http://localhost:8080/dashboard  # Coco
-open http://localhost:3000            # Twenty (if running)
+curl -s localhost:8080/health
+# {"status":"ok","packs_loaded":5}
 ```
 
-Keep a terminal visible for the audit-log reveal at the end.
+Open `http://localhost:8080/dashboard`. Verify the **Live** view loads
+with tiles populated, the sidebar shows nav items, and the health pill
+top-right is green.
 
 ---
 
-## The script
+## Journey A · Integrator installs Coco
 
-### 0. Frame it (30 seconds)
+The first time someone opens the dashboard.
 
-> "Coco is the Trust Layer between AI agents and enterprise SaaS. When
-> an agent wants to move a deal, delete a contact, or send a bulk email,
-> it asks Coco first. Coco reads the live UI state, runs it through a
-> YAML behavioral contract, and returns ALLOW, BLOCK, or ESCALATE. Every
-> verdict is audited. That's the whole product. Let me show you."
+| Step | User | Product |
+|---|---|---|
+| A1 | Lands on `#/onboarding` (or `#/integrations`) | Four-step card stack: Gateway up ✓, Connect Twenty, Install SDK, Watch first verdict. |
+| A2 | Goes to **Integrations** | Three cards: Twenty CRM (needs creds), JavaScript SDK (copy-paste snippet + bookmarklet), Coco Gateway (healthy). |
+| A3 | Pastes Twenty base URL and API key, hits **Test connection** | Spinner → green "Connected" pill. Creds saved to `localStorage`. |
+| A4 | Drags the purple bookmarklet to the bookmarks bar, opens Twenty, clicks it | Coco badge appears bottom-right inside Twenty (`Coco · Gateway · 5 packs · Validate`). |
+| A5 | Returns to dashboard | Onboarding step 4 is now active. Live feed will pick up the first verdict as soon as one fires. |
 
-### 1. The dashboard (1 min)
+## Journey B · Admin's daily Live view
 
-**Open** `http://localhost:8080/dashboard`.
+Default landing after install. The "watch the gateway" view.
 
-Point at each section:
+| Step | User | Product |
+|---|---|---|
+| B1 | Opens `#/live` | Four tiles: Verdicts/hour, Block rate (with delta), p95 latency, Escalations pending. Feed shows the last 100 verdicts, newest top. |
+| B2 | Clicks any row | Right drawer slides in. Top: verdict badge + plain-English reason. Mid: meta grid (pack, action, phase, time, audit ID). Then: per-check pass/fail list with observed values. Then: highlighted YAML of the policy that fired. Footer: "Open pack" and "View in audit" links. |
+| B3 | Hits **Esc** | Drawer closes. |
+| B4 | Hits **j** / **k** | Selection moves down/up the feed. **Enter** opens the drawer for the selected row. |
+| B5 | Types in the search bar `"skip"` | Feed filters to BLOCK rows about skipping deal stages. URL updates → refresh keeps the filter. |
+| B6 | Clicks the **BLOCK** chip | Feed and tiles both narrow to BLOCK verdicts only. |
+| B7 | Hits **⌘K** / **/** | Command palette opens. Jump to any view, pack, or scenario. |
 
-- **Top bar** — "Gateway is live, 5 packs loaded, 19 scenarios staged."
-- **Flow strip** — "Agent captures state → sends to gateway → engine
-  runs the pack → verdict + audit."
-- **Pack grid** — "Five Twenty CRM packs. Each one is a YAML file a
-  product manager can edit without touching code."
-- **Click `twenty.deal_stage_move`.**
-  > "This pack governs pipeline transitions. Pre-conditions check the
-  > deal has an owner. Constraints say 'amount below 50k or manager field
-  > filled.' Post-conditions verify the move actually landed — that's
-  > our silent-failure detector."
+## Journey C · Admin handles an escalation
 
-### 2. Run a scenario — engine driver (1 min)
+| Step | User | Product |
+|---|---|---|
+| C1 | Sidebar shows orange badge "9" on Escalations. Clicks it. | Queue view: each ESCALATE row as a card. Pack, action, time, plain reason, side-by-side current state vs proposed action, Approve / Deny / Details buttons. |
+| C2 | Clicks **Approve** on a card | Prompt for optional comment → POST `/api/escalations/{id}/approve`. Card removed from queue. A follow-up ALLOW audit row is written, visible in Live + Audit. |
+| C3 | Clicks **Deny** on another | Same flow, follow-up BLOCK row written. |
+| C4 | Clicks **Details** | Verdict drawer opens with the full original decision and YAML. |
 
-**Scroll to the scenario grid. Keep the driver toggle on `engine`.**
+## Journey D · Admin edits a policy
 
-> "19 scenarios cover every pack — green expected ALLOW, red expected
-> BLOCK, amber expected ESCALATE. Let me run a known ALLOW."
+The product's central promise: change policy without redeploying code.
 
-**Click `deal_stage_move_allow`.**
+| Step | User | Product |
+|---|---|---|
+| D1 | From a Live drawer, clicks **Open pack** | Routes to `#/packs/twenty.bulk_email`, that pack pre-selected. Sidebar shows all five packs. |
+| D2 | Sees the pack header (name, action, description, version chip), the YAML viewer, and a list of attached regression scenarios with last-run verdict colors. | · |
+| D3 | Clicks **Edit** | YAML viewer flips to a textarea editor. Save / Cancel buttons appear. |
+| D4 | Bumps `max_recipients` from 50 to 250, hits **Save** | Backend validates YAML, snapshots the current version to `data/twenty/packs/_versions/<pack_id>/<timestamp>.yaml`, writes the new file, hot-reloads the engine. Toast: *"Pack saved · live now."* Version chip updates. |
+| D5 | Clicks **Run** on the `bulk_email_block_over_limit` scenario row | POST `/api/scenarios/.../run`. New verdict is ALLOW now (was BLOCK with the old threshold). Toast confirms. |
+| D6 | Returns to Live | Top of the feed shows the new ALLOW row. |
 
-- Verdict panel fills with a green ALLOW badge.
-- Check rows tick through pre-conditions, constraints, post-conditions.
-- Primary reason: "All checks passed."
+## Journey E · End user inside Twenty hits a block
 
-> "That's the happy path. Now the same pack, deal with no owner."
+The user-facing surface. What an actual CRM operator sees.
 
-**Click `deal_stage_move_block_no_owner`.**
+| Step | User | Product |
+|---|---|---|
+| E1 | In Twenty, on a deal page. Coco badge sits in the corner. | Badge dot: green = gateway OK. Text: `Gateway · 5 packs`. |
+| E2 | Clicks the Coco **Validate** button (or triggers an action wired to the SDK). | Badge dot pulses amber while validating. |
+| E3 | If verdict = BLOCK | Centered modal slides over Twenty. Pill: BLOCKED. Title: *Action blocked by policy*. Body: plain-English reason. Below, a compact code block names the policy + the failing rule. Foot buttons: **See policy** · **Request override** · **Cancel** (default). |
+| E4 | Clicks **See policy** | Right-side drawer slides in. Drawer body: full YAML of the policy with the firing rule highlighted in purple, auto-scrolled into view. |
+| E5 | Closes drawer (× or Esc), clicks **Request override** | Prompt for a reason. POST `/api/demo/escalate`. Modal closes. Verdict card flips to amber ESCALATE *"Pending review · manager will be notified."* Escalation appears in the admin's queue (Journey C). |
+| E6 | If verdict = ALLOW | Small corner card slides in with a green ALLOW pill. Auto-dismisses in 14 seconds. |
 
-- Red BLOCK badge.
-- First failing check highlighted: `deal.owner not_empty → FAIL`.
-- Primary reason: "Deal has no assigned owner."
+## Journey F · Auditor exports the quarter
 
-> "The agent now has a machine-readable reason to refuse the action."
-
-### 3. The audit log (30 sec)
-
-**Scroll to the audit table at the bottom.**
-
-> "Every verdict writes one row to SQLite. Timestamp, pack, action,
-> phase, verdict, primary reason. Production upgrade path is Postgres —
-> same schema."
-
-**Switch to terminal briefly:**
-```bash
-curl -s localhost:8080/api/audit?limit=5 | jq '.[0]'
-```
-
-### 4. Real Twenty CRUD — the hero moment (2 min)
-
-If Twenty is up, skip to this. If not, say: "Twenty's running on my
-laptop in its own Docker stack — same demo, just faster to show here."
-
-**Open the Twenty tab.** Point at Opportunities → Northwind Labs.
-
-> "This is the real Twenty CRM, not a simulator. Seeded with 5
-> companies, 10 people, 3 opportunities by a Python script."
-
-**Back to Coco dashboard.** **Flip driver toggle to `twenty`.**
-
-> "Now the same scenario runs against live Twenty. The provider reads
-> Twenty's REST — opportunity, tasks, stage — and builds a real `ui_state`.
-> Pack verdicts it. On ALLOW, the agent actually PATCHes Twenty."
-
-**Click `deal_stage_move_allow` with driver=twenty.**
-
-- Green ALLOW.
-- Verdict panel shows `twenty_response` with the new stage.
-- **Switch to Twenty tab, refresh** — opportunity has moved stages.
-
-> "Real CRUD. Driven by the verdict."
-
-**Click `deal_stage_move_block_no_owner` with driver=twenty.**
-
-- Red BLOCK.
-- `twenty_response: null` — no mutation ran.
-- **Refresh Twenty tab** — opportunity is untouched.
-
-> "This is the core guarantee: if the gateway says no, Twenty doesn't
-> move. The agent doesn't get a second opinion."
-
-### 5. The SDK bookmarklet (1 min)
-
-**Open `scripts/inject_bookmarklet.html` in a new tab.** Drag the
-bookmarklet to the bookmarks bar.
-
-**Switch to the Twenty tab. Click the bookmarklet.**
-
-- A small floating Coco badge appears bottom-right.
-- Green dot — gateway reachable.
-- "Validate current page" button.
-
-**Click it.**
-
-- Toast: "Verdict: ALLOW / BLOCK / ESCALATE" based on current page
-  state.
-
-> "That's the zero-code integration path. No fork, no frontend rebuild.
-> Drop this script tag into any SaaS and every governed action gets
-> a verdict. This is how we onboard a customer in under an hour."
-
-### 6. Close (30 sec)
-
-> "45 tests green. 19/19 pack regression green. The whole thing boots
-> in 3 seconds, runs on SQLite for dev, PostgreSQL for prod. Questions?"
+| Step | User | Product |
+|---|---|---|
+| F1 | Opens **Audit Ledger** | Full-width table. Filter bar: search by reason text, pack dropdown, ALLOW/BLOCK/ESCALATE chips, date range. |
+| F2 | Sets date range Q1, clicks BLOCK chip. | Table updates. Footer: *"1,247 rows · 14 packs"*. URL updates so the filter is shareable. |
+| F3 | Clicks **Export CSV** | Browser download. Every row has full decision JSON in the `decision` column. The CSV respects the active filters. |
+| F4 | Wants to drill into a specific row | Clicks the row → drawer opens with the full decision. |
 
 ---
 
-## Anticipated questions
+## Keyboard reference
 
-| Q | Short answer |
+| Key | What it does |
 |---|---|
-| "What if the gateway is down?" | SDK fails open by default, configurable. The audit table shows nothing was verdicted, so the gap is observable. |
-| "Latency?" | 3-6ms per verdict local, 20-40ms with Twenty REST. DSL is AST-evaluated in-process. |
-| "Who writes the packs?" | Product managers. YAML + a tiny expression DSL. No Python needed. |
-| "Why not just use OPA / Cedar?" | Both are great for API-layer decisions. Neither reads browser UI state. Coco is the only layer that catches silent UI failures post-action. |
-| "How do I add a new pack?" | Drop a YAML into `data/<saas>/packs/`, restart. Packs are data, not code. |
-| "Can it replay?" | Audit table stores the full decision JSON. Yes. |
+| `⌘K` / `Ctrl-K` / `/` | Open command palette |
+| `j` / `k` | Move selection down / up the Live feed |
+| `Enter` | Open drawer for the selected row |
+| `Esc` | Close palette > drawer > modal (whichever is open) |
+
+## URL state
+
+All filters and selections live in the URL hash:
+
+- `#/live?v=BLOCK&pack=twenty.bulk_email&q=skip`
+- `#/packs/twenty.deal_stage_move?q=stage`
+- `#/audit?v=BLOCK&from=2026-01-01&to=2026-03-31`
+- `#/audit?id=142` (deep-link to a specific audit row)
+
+Refresh keeps state. Links are shareable.
+
+## Where things live
+
+| File / route | Purpose |
+|---|---|
+| `backend/dashboard/templates/index.html` | App shell (sidebar + topbar + main + drawer + palette + toasts). |
+| `backend/dashboard/static/styles.css` + `tokens.css` | Design tokens and component styles. |
+| `backend/dashboard/static/app.js` | Router + per-view renderers + shared components. |
+| `frontend/inject.js` | Twenty-side overlay (badge, verdict card, blocked modal, policy drawer). Renders into a shadow DOM root. |
+| `frontend/coco-sdk.js` | Stateless validate client. |
+| `backend/routes/metrics.py` | `/api/metrics/live`, tiles. |
+| `backend/routes/escalations.py` | `/api/escalations` + approve/deny. |
+| `backend/routes/audit_advanced.py` | `/api/audit/search` + `/api/audit/export.csv`. |
+| `backend/routes/packs_yaml.py` | `/api/packs/{id}/yaml` (GET/PUT), `/versions`, `/revert`. |
+| `data/twenty/packs/*.yaml` | The 5 default packs. |
+| `data/twenty/packs/_versions/<pack>/` | Auto-snapshotted prior versions. |
+| `data/runtime/audit.db` | SQLite audit log (+ escalation_status table). |
 
 ## Shutdown
 
 ```bash
-tmux kill-session -t coco_demo
-docker compose -f twenty/packages/twenty-docker/docker-compose.yml down
+tmux kill-session -t coco_gateway
 ```

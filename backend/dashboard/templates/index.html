@@ -1,277 +1,113 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Coco Trust Layer — Twenty CRM Gateway</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Coco · Trust Layer</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link
-    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
-    rel="stylesheet"
-  />
-  <link rel="stylesheet" href="/static/styles.css?v=2" />
-  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/styles.css?v=3" />
+  <link rel="icon" type="image/svg+xml" href="/static/assets/coco-logo.svg" />
 </head>
 <body>
-  <header class="top-bar">
-    <div class="top-bar-inner">
-      <div class="brand">
-        <img class="brand-logo" src="/static/assets/coco-logo.svg" alt="Coco" />
-        <div class="brand-meta">
-          <span class="brand-title">Trust Layer · Gateway</span>
-          <span class="brand-sub">Live enforcement for Twenty CRM</span>
-        </div>
-      </div>
-      <nav class="top-bar-nav">
-        <a class="nav-link" href="#packs">Packs</a>
-        <a class="nav-link" href="#scenarios">Scenarios</a>
-        <a class="nav-link" href="#audit">Audit</a>
-        <a class="nav-link" href="#twenty">Twenty</a>
-        <a class="nav-pill" id="nav-health" href="#" title="Gateway health">
-          <span class="health-dot" data-status="unknown"></span>
-          <span id="nav-health-label">Checking…</span>
+  <div class="app">
+    <aside class="sidebar" aria-label="Primary navigation">
+      <a class="brand" href="#/live">
+        <span class="brand-mark">C</span>
+        <span class="brand-name">Coco</span>
+      </a>
+
+      <div class="nav-section">
+        <div class="nav-section-label">Operate</div>
+        <a class="nav-item" data-route="live" href="#/live">
+          <span class="nav-glyph" data-glyph="activity"></span>
+          <span>Live</span>
         </a>
-      </nav>
+        <a class="nav-item" data-route="escalations" href="#/escalations">
+          <span class="nav-glyph" data-glyph="bell"></span>
+          <span>Escalations</span>
+          <span class="nav-badge" id="badge-escalations" data-empty="true">0</span>
+        </a>
+      </div>
+
+      <div class="nav-section">
+        <div class="nav-section-label">Govern</div>
+        <a class="nav-item" data-route="packs" href="#/packs">
+          <span class="nav-glyph" data-glyph="file"></span>
+          <span>Action Packs</span>
+        </a>
+        <a class="nav-item" data-route="audit" href="#/audit">
+          <span class="nav-glyph" data-glyph="layers"></span>
+          <span>Audit Ledger</span>
+        </a>
+      </div>
+
+      <div class="nav-section">
+        <div class="nav-section-label">Connect</div>
+        <a class="nav-item" data-route="integrations" href="#/integrations">
+          <span class="nav-glyph" data-glyph="plug"></span>
+          <span>Integrations</span>
+        </a>
+        <a class="nav-item" data-route="settings" href="#/settings">
+          <span class="nav-glyph" data-glyph="cog"></span>
+          <span>Settings</span>
+        </a>
+      </div>
+
+      <div class="sidebar-foot">
+        <div>Gateway v0.2</div>
+        <div id="foot-clock">—</div>
+      </div>
+    </aside>
+
+    <header class="topbar">
+      <div class="topbar-left">
+        <button class="workspace" id="workspace-btn" type="button" aria-label="Switch workspace">
+          <span>Twenty CRM</span>
+          <span class="workspace-chev">▾</span>
+        </button>
+      </div>
+      <div class="topbar-right">
+        <button class="search-box" id="palette-open" type="button" aria-label="Open command palette">
+          <span class="nav-glyph" data-glyph="search"></span>
+          <span>Search packs, scenarios, audit…</span>
+          <span class="kbd">⌘K</span>
+        </button>
+        <span class="health-pill" id="health-pill" title="Gateway health">
+          <span class="health-dot" data-status="unknown"></span>
+          <span id="health-label">Checking…</span>
+        </span>
+      </div>
+    </header>
+
+    <main class="main" id="view-root" aria-live="polite"></main>
+  </div>
+
+  <!-- Drawer (verdict / pack detail) -->
+  <div class="drawer-scrim" id="drawer-scrim"></div>
+  <aside class="drawer" id="drawer" aria-hidden="true">
+    <div class="drawer-head">
+      <div class="drawer-title">
+        <span class="verdict verdict-lg" data-v="—" id="drawer-verdict">—</span>
+        <h3 id="drawer-title">Select a verdict</h3>
+      </div>
+      <button class="drawer-close" id="drawer-close" aria-label="Close">✕</button>
     </div>
-  </header>
+    <div class="drawer-body" id="drawer-body"></div>
+    <div class="drawer-foot" id="drawer-foot"></div>
+  </aside>
 
-  <main class="page">
-    <section class="hero">
-      <div class="hero-copy">
-        <div class="eyebrow">
-          <span class="eyebrow-dot"></span>
-          Twenty CRM · live gateway
-        </div>
-        <h1>
-          Enforcement at the screen,
-          <span class="accent">before damage occurs.</span>
-        </h1>
-        <p class="lede">
-          Agent Action Packs compile to runtime contracts. The Coco Gateway
-          validates every agent action against live Twenty UI state — pre
-          conditions, business constraints, post-conditions, drift — and
-          writes every verdict to an auditable ledger.
-        </p>
-        <div class="hero-cta">
-          <button class="btn btn-primary" data-scroll="scenarios">
-            <i data-lucide="play-circle"></i>
-            Run a scenario
-          </button>
-          <button class="btn btn-ghost" id="open-bookmarklet">
-            <i data-lucide="link"></i>
-            Inject SDK into Twenty
-          </button>
-        </div>
-      </div>
-      <div class="hero-stats" id="stats-row">
-        <div class="stat-card" data-variant="purple">
-          <div class="stat-label">Action Packs</div>
-          <div class="stat-value" id="stat-packs">–</div>
-          <div class="stat-caption">YAML contracts live</div>
-        </div>
-        <div class="stat-card" data-variant="green">
-          <div class="stat-label">Scenarios</div>
-          <div class="stat-value" id="stat-scenarios">–</div>
-          <div class="stat-caption">Regression fixtures</div>
-        </div>
-        <div class="stat-card" data-variant="amber">
-          <div class="stat-label">Audit rows</div>
-          <div class="stat-value" id="stat-audit">–</div>
-          <div class="stat-caption">Last 500 decisions</div>
-        </div>
-        <div class="stat-card" data-variant="ink">
-          <div class="stat-label">Gateway</div>
-          <div class="stat-value" id="stat-gateway">–</div>
-          <div class="stat-caption">Health status</div>
-        </div>
-      </div>
-    </section>
+  <!-- Command palette -->
+  <div class="palette-scrim" id="palette-scrim"></div>
+  <div class="palette" id="palette" role="dialog" aria-hidden="true">
+    <input class="palette-input" id="palette-input" placeholder="Jump to a view, pack, or scenario…" autocomplete="off" />
+    <ul class="palette-list" id="palette-list" role="listbox"></ul>
+  </div>
 
-    <section class="flow-strip">
-      <div class="flow-node">
-        <div class="flow-icon"><i data-lucide="user"></i></div>
-        <div class="flow-body">
-          <div class="flow-title">Agent</div>
-          <div class="flow-desc">AI or human acting in Twenty</div>
-        </div>
-      </div>
-      <div class="flow-arrow"><i data-lucide="arrow-right"></i></div>
-      <div class="flow-node accent">
-        <div class="flow-icon"><i data-lucide="shield-check"></i></div>
-        <div class="flow-body">
-          <div class="flow-title">Coco Gateway</div>
-          <div class="flow-desc">Packs · Constraints · Drift</div>
-        </div>
-      </div>
-      <div class="flow-arrow"><i data-lucide="arrow-right"></i></div>
-      <div class="flow-node">
-        <div class="flow-icon"><i data-lucide="database"></i></div>
-        <div class="flow-body">
-          <div class="flow-title">Twenty CRM</div>
-          <div class="flow-desc">Live REST API + UI state</div>
-        </div>
-      </div>
-      <div class="flow-arrow"><i data-lucide="arrow-right"></i></div>
-      <div class="flow-node ledger">
-        <div class="flow-icon"><i data-lucide="scroll-text"></i></div>
-        <div class="flow-body">
-          <div class="flow-title">Audit ledger</div>
-          <div class="flow-desc">Every verdict, forever</div>
-        </div>
-      </div>
-    </section>
+  <!-- Toast stack -->
+  <div class="toast-stack" id="toast-stack" aria-live="polite"></div>
 
-    <section class="hero-screenshots" aria-label="Verdict examples">
-      <figure class="hero-shot">
-        <img src="/static/assets/screenshots/03_verdict_allow.png" alt="ALLOW verdict example" loading="lazy" />
-        <figcaption class="hero-shot-label" data-kind="allow">Allow</figcaption>
-      </figure>
-      <figure class="hero-shot">
-        <img src="/static/assets/screenshots/04_verdict_block.png" alt="BLOCK verdict example" loading="lazy" />
-        <figcaption class="hero-shot-label" data-kind="block">Block</figcaption>
-      </figure>
-      <figure class="hero-shot">
-        <img src="/static/assets/screenshots/05_verdict_escalate.png" alt="ESCALATE verdict example" loading="lazy" />
-        <figcaption class="hero-shot-label" data-kind="escalate">Escalate</figcaption>
-      </figure>
-      <figure class="hero-shot">
-        <img src="/static/assets/screenshots/08_batch_results.png" alt="Batch scenario results" loading="lazy" />
-        <figcaption class="hero-shot-label" data-kind="batch">Batch run</figcaption>
-      </figure>
-    </section>
-
-    <section id="packs" class="panel">
-      <div class="panel-head">
-        <div>
-          <h2>Action Packs</h2>
-          <p class="panel-sub">The five Twenty CRM contracts currently loaded in the gateway.</p>
-        </div>
-      </div>
-      <div class="pack-grid" id="pack-grid">
-        <div class="pack-loading">Loading packs…</div>
-      </div>
-    </section>
-
-    <section id="scenarios" class="panel">
-      <div class="panel-head">
-        <div>
-          <h2>Scenarios</h2>
-          <p class="panel-sub">
-            Pick a scenario to run it through the live gateway. The verdict
-            panel below renders the raw decision, check by check.
-          </p>
-        </div>
-        <div class="panel-toolbar">
-          <div class="driver-toggle">
-            <label>
-              <input type="radio" name="driver" value="engine" checked />
-              <span>Engine</span>
-            </label>
-            <label>
-              <input type="radio" name="driver" value="twenty" />
-              <span>Live Twenty</span>
-            </label>
-          </div>
-          <button class="btn btn-ghost" id="run-all">
-            <i data-lucide="list-checks"></i>
-            Run all
-          </button>
-        </div>
-      </div>
-      <div class="scenario-grid" id="scenario-grid">
-        <div class="scenario-loading">Loading scenarios…</div>
-      </div>
-    </section>
-
-    <section class="verdict-section">
-      <div class="verdict-panel" id="verdict-panel">
-        <div class="verdict-empty" id="verdict-empty">
-          <i data-lucide="scan-line"></i>
-          <h3>Select a scenario to see the verdict</h3>
-          <p>
-            Every run posts to <code>/api/scenarios/{id}/run</code>, which
-            calls the real gateway, runs the pack checks, and writes a row
-            to the audit log.
-          </p>
-        </div>
-        <div class="verdict-detail" id="verdict-detail" hidden></div>
-      </div>
-      <aside class="pack-detail" id="pack-detail">
-        <div class="pack-detail-empty">
-          <i data-lucide="file-code-2"></i>
-          <h3>Pack YAML</h3>
-          <p>Click a pack or scenario to inspect the contract.</p>
-        </div>
-      </aside>
-    </section>
-
-    <section id="audit" class="panel">
-      <div class="panel-head">
-        <div>
-          <h2>Audit ledger</h2>
-          <p class="panel-sub">Recent verdicts written by the gateway. Refreshes after every run.</p>
-        </div>
-        <div class="panel-toolbar">
-          <button class="btn btn-ghost" id="refresh-audit">
-            <i data-lucide="refresh-cw"></i>
-            Refresh
-          </button>
-        </div>
-      </div>
-      <div class="audit-table-wrap">
-        <table class="audit-table">
-          <thead>
-            <tr>
-              <th>Time</th>
-              <th>Pack</th>
-              <th>Action</th>
-              <th>Phase</th>
-              <th>Verdict</th>
-              <th>Primary reason</th>
-            </tr>
-          </thead>
-          <tbody id="audit-body">
-            <tr><td colspan="6" class="audit-empty">Loading audit…</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
-
-    <section id="twenty" class="panel twenty-panel">
-      <div class="panel-head">
-        <div>
-          <h2>Twenty onboarding wizard</h2>
-          <p class="panel-sub">
-            Walk the six steps below end-to-end: bring Twenty up on localhost,
-            connect it to the gateway, seed fixture data, install the browser
-            extension, and run your first live scenario.
-          </p>
-        </div>
-      </div>
-      <div class="wizard" id="wizard">
-        <aside class="wizard-rail" id="wizard-rail"></aside>
-        <div class="wizard-pane" id="wizard-pane"></div>
-      </div>
-    </section>
-
-    <footer class="page-foot">
-      <div>
-        <span class="foot-mark">Coco</span> Trust Layer · Gateway v0.1 ·
-        <span id="foot-time">—</span>
-      </div>
-      <div class="foot-links">
-        <a href="/api/packs" target="_blank">/api/packs</a>
-        <a href="/api/scenarios" target="_blank">/api/scenarios</a>
-        <a href="/api/audit?limit=50" target="_blank">/api/audit</a>
-        <a href="/health" target="_blank">/health</a>
-      </div>
-    </footer>
-  </main>
-
-  <div class="toast-stack" id="toast-stack"></div>
-
-  <script src="/static/app.js?v=2"></script>
-  <script src="/static/wizard.js?v=3"></script>
+  <script src="/static/app.js?v=3" defer></script>
 </body>
 </html>
