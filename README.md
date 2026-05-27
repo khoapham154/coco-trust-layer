@@ -66,21 +66,6 @@ open http://localhost:8080/dashboard
 No Twenty needed for the dashboard. Open the built-in sandbox at
 `http://localhost:8080/sandbox/twenty` to try the user-facing overlay.
 
-## Run the demo on Windows (one click)
-
-For recording or a quick look, no command line needed:
-
-1. Install Python 3.11 from [python.org](https://www.python.org/downloads/).
-   Tick **Add python.exe to PATH** during setup.
-2. Clone or download this repo.
-3. Double-click `run_demo.bat`. The first run installs dependencies,
-   then the gateway starts. Leave the window open.
-4. In Chrome, open `http://localhost:8080/dashboard` and
-   `http://localhost:8080/sandbox/twenty`.
-
-The full recording script is in
-[docs/demo_video_script.md](docs/demo_video_script.md).
-
 ## What you see
 
 ### Live
