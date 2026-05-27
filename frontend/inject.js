@@ -89,13 +89,10 @@
     0%,100% { opacity: 1; }
     50%     { opacity: 0.5; }
   }
-  .badge-brand {
-    background: linear-gradient(135deg, #a855f7 0%, #5b21b6 100%);
-    color: #fff;
-    font-weight: 700;
-    font-size: 11px;
-    border-radius: 5px;
-    padding: 2px 6px;
+  .badge-logo {
+    height: 15px;
+    width: auto;
+    display: block;
   }
   .badge-text { font-size: 12px; color: #3a3a45; }
   .badge-btn {
@@ -381,7 +378,7 @@
 
 <div class="root">
   <div class="badge" id="badge" hidden>
-    <span class="badge-brand">Coco</span>
+    <img class="badge-logo" src="${window.__COCO_GATEWAY_URL}/static/assets/coco-logo.svg" alt="Coco">
     <span class="badge-dot" id="badge-dot" data-s="ok"></span>
     <span class="badge-text" id="badge-text">Watching Twenty</span>
     <button class="badge-btn" id="badge-validate">Validate</button>

@@ -160,23 +160,10 @@ button { font-family: inherit; }
   text-decoration: none;
   color: var(--ink-0);
 }
-.brand-mark {
-  width: 26px;
-  height: 26px;
-  border-radius: 7px;
-  background: linear-gradient(135deg, #a855f7 0%, #5b21b6 100%);
-  color: #fff;
-  display: grid;
-  place-items: center;
-  font-weight: 700;
-  font-size: 13px;
-  letter-spacing: 0.02em;
-  box-shadow: 0 1px 3px rgba(91, 33, 182, 0.30);
-}
-.brand-name {
-  font-size: var(--fs-14);
-  font-weight: 600;
-  letter-spacing: -0.01em;
+.brand-logo {
+  height: 24px;
+  width: auto;
+  display: block;
 }
 
 .nav-section { display: flex; flex-direction: column; gap: 2px; }

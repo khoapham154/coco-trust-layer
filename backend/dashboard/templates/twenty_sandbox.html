@@ -207,7 +207,7 @@
         <strong>What each button does:</strong>
         <ul style="margin: 6px 0 0 0; padding-left: 18px;">
           <li><strong>Move stage NEW → NEGOTIATION (skip)</strong> — triggers <code>twenty.deal_stage_move</code>. Skipping screening violates a constraint → <strong>BLOCK</strong> with the firing-rule highlighted in the policy drawer.</li>
-          <li><strong>Move stage NEW → SCREENING</strong> — same pack, valid move → <strong>ALLOW</strong> (or <strong>ESCALATE</strong> if the deal is over $50K and the manager field is empty).</li>
+          <li><strong>Move stage NEW → SCREENING</strong> — same pack, sequential move, but this deal is over $50K with the manager field empty → <strong>ESCALATE</strong>.</li>
           <li><strong>Delete contact</strong> — triggers <code>twenty.contact_delete</code> → <strong>ALLOW</strong> (sandboxed contact has no open deals).</li>
           <li><strong>Send 80-recipient blast</strong> — triggers <code>twenty.bulk_email</code>, exceeds the 50-recipient limit → <strong>BLOCK</strong>.</li>
         </ul>
@@ -235,7 +235,7 @@
       user: { role: "sales" }
     });
     bindAction("act-move-good", "move_stage", "twenty.deal_stage_move", {
-      deal: { owner: "u_002", amount: 30000, prev_stage_tasks_completed: true,
+      deal: { owner: "u_002", amount: 82000, prev_stage_tasks_completed: true,
               is_sequential_stage_move: true, manager_field_filled: false,
               target_stage: "screening" },
       user: { role: "sales" }
@@ -245,8 +245,9 @@
       user: { role: "admin" }
     });
     bindAction("act-bulk", "send_bulk_email", "twenty.bulk_email", {
-      email: { has_valid_recipient_list: true, recipient_count: 80,
-               has_flagged_recipient: false, activity_logged_for_all: true }
+      email: { has_valid_recipient_list: true, all_recipients_have_email: true,
+               recipient_count: 80, has_flagged_recipient: false,
+               activity_logged_for_all: true }
     });
   </script>
   <!-- Coco SDK + overlay, served by the gateway itself -->
