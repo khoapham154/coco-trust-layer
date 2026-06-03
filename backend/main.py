@@ -18,9 +18,11 @@ from routes import (
     audit_advanced_router,
     audit_router,
     dashboard_router,
+    demo_bank_router,
     demo_router,
     escalations_router,
     metrics_router,
+    mock_obp_router,
     packs_router,
     packs_yaml_router,
     scenarios_router,
@@ -34,8 +36,8 @@ log = logging.getLogger("coco.gateway")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    log.info("Loading packs from %s", settings.pack_dir)
-    packs = AgentActionPack.load_all(settings.pack_dir)
+    log.info("Loading packs from %s", ", ".join(str(d) for d in settings.pack_dirs))
+    packs = AgentActionPack.load_all_dirs(settings.pack_dirs)
     log.info("Loaded %d packs: %s", len(packs), ", ".join(sorted(packs.keys())))
     app.state.engine = GatewayEngine(packs)
     app.state.audit_log = AuditLog(settings.db_path)
@@ -72,6 +74,8 @@ app.include_router(metrics_router)
 app.include_router(escalations_router)
 app.include_router(twenty_ops_router)
 app.include_router(demo_router)
+app.include_router(demo_bank_router)
+app.include_router(mock_obp_router)
 app.include_router(dashboard_router)
 
 _STATIC_DIR = Path(__file__).resolve().parent / "dashboard" / "static"

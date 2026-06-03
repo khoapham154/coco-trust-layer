@@ -138,6 +138,7 @@
     revert:      '<polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>',
     eye:         '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>',
     copy:        '<rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>',
+    bank:        '<line x1="3" y1="21" x2="21" y2="21"></line><line x1="3" y1="10" x2="21" y2="10"></line><polyline points="5 6 12 3 19 6"></polyline><line x1="4" y1="10" x2="4" y2="21"></line><line x1="20" y1="10" x2="20" y2="21"></line><line x1="9" y1="10" x2="9" y2="21"></line><line x1="15" y1="10" x2="15" y2="21"></line>',
   };
 
   function mountGlyphs() {
@@ -374,6 +375,7 @@
         { label: "Audit Ledger", href: "#/audit", kind: "view" },
         { label: "Integrations", href: "#/integrations", kind: "view" },
         { label: "Settings", href: "#/settings", kind: "view" },
+        { label: "Agent Banking", href: "#/banking", kind: "view" },
       ];
       (state.packs || []).forEach((p) => items.push({ label: p.id, href: `#/packs/${encodeURIComponent(p.id)}`, kind: "pack" }));
       (state.scenarios || []).forEach((s) => items.push({ label: s.id, href: `#/packs/${encodeURIComponent(s.pack_id)}?run=${encodeURIComponent(s.id)}`, kind: "scenario" }));
@@ -1413,6 +1415,212 @@
     });
 
     view.appendChild(wrap);
+  };
+
+  /* ---- 8.9 AGENT BANKING (pipeline demo) ----------------------- */
+
+  routes.banking = async function (root) {
+    const SCENARIOS = [
+      { id: "payroll", label: "Run payroll", agentIntent: "Pay the fortnightly payroll batch to PayCycle.",
+        accountId: "operating-au-001", accountLabel: "Operating Account", payee: "PayCycle Payroll Pty Ltd", amount: 5000, currency: "USD" },
+      { id: "sanctioned-wire", label: "Wire $2M to a flagged entity", agentIntent: "Wire 2,000,000 to Hint Global Trading FZE.",
+        accountId: "treasury-002", accountLabel: "Treasury Account", payee: "Hint Global Trading FZE", amount: 2000000, currency: "USD" },
+      { id: "vendor-settlement", label: "Settle a $250k invoice", agentIntent: "Settle the quarterly logistics invoice with Meridian.",
+        accountId: "payments-003", accountLabel: "Payments Account", payee: "Meridian Logistics Ltd", amount: 250000, currency: "USD" },
+    ];
+
+    // Five of the six layers are illustrative: we name the vendors that work
+    // at each layer but do not call them. Only stage four runs live.
+    const STAGES = [
+      { n: 1, key: "discovery", title: "Discovery", role: "The agent finds the tools and other agents it can use.", vendors: ["MCP", "A2A", "OBP-MCP"] },
+      { n: 2, key: "authentication", title: "Authentication", role: "The bank verifies which agent is calling, not the human who deployed it.", vendors: ["Visa Trusted Agent Protocol"] },
+      { n: 3, key: "authorisation", title: "Authorisation", role: "The agent is cleared to initiate transfers.", vendors: ["Mastercard Verifiable Intent", "PayPal ACP"] },
+      { n: 4, key: "enforcement", title: "Runtime enforcement", role: "Coco reads the live account state and rules on the action before it executes.", vendors: ["Coco"], coco: true },
+      { n: 5, key: "detection", title: "Detection", role: "Behavioural monitors watch the action stream for anomalies.", vendors: ["Darwinium", "SEON", "Hawk"] },
+      { n: 6, key: "investigation", title: "Investigation", role: "Forensics reconstruct what happened for compliance.", vendors: ["Unit21", "Chainalysis", "TRM Labs"] },
+    ];
+
+    const CHECK_LABELS = {
+      account_active: "Source account active",
+      no_sanctions_hold: "No sanctions hold",
+      payee_approved: "Payee is an approved beneficiary",
+      amount_within_auto_limit: "Within the auto-approve limit",
+    };
+
+    // Stages 1 to 3 clear the transfer in every scenario: none of them can
+    // see the hold. Stages 5 and 6 read differently per verdict.
+    function stageOutcome(key, verdict, auditId) {
+      const audit = auditId ? `#${auditId}` : "pending";
+      switch (key) {
+        case "discovery":      return "Tools and agents resolved. The transfer endpoint is available.";
+        case "authentication": return "Agent identity verified. Known agent, valid credential.";
+        case "authorisation":  return "Agent is permitted to initiate transfers. Cleared to proceed.";
+        case "detection":
+          if (verdict === "BLOCK") return "Nothing to flag. Coco stopped the transfer before it reached the stream.";
+          if (verdict === "ESCALATE") return "Held alongside Coco's review. No independent anomaly.";
+          return "Nominal. The transfer matches the account's pattern.";
+        case "investigation":
+          if (verdict === "BLOCK") return `Audit row ${audit} records the block and the rule that fired.`;
+          if (verdict === "ESCALATE") return `Audit row ${audit} opened for the approver.`;
+          return `Logged to audit row ${audit}. Full trail available.`;
+        default: return "";
+      }
+    }
+
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const money = (amt, cur) => new Intl.NumberFormat("en-US", { style: "currency", currency: cur, maximumFractionDigits: 0 }).format(amt);
+    const bkMeta = (s) => `${s.accountLabel} · ${money(s.amount, s.currency)} → ${s.payee}`;
+
+    let running = false;
+    let selected = SCENARIOS[0];
+
+    const view = h("div", { class: "view" });
+    root.appendChild(view);
+    view.appendChild(h("div", { class: "view-head" },
+      h("div", {},
+        h("h1", { class: "view-title" }, "Agent Banking"),
+        h("p", { class: "view-sub" }, "An AI agent moves money through six layers of the agent-banking trust stack. Coco is stage four: it reads the live account state and rules allow, block or escalate before the money moves."),
+      ),
+    ));
+
+    const chipRow = h("div", { class: "bk-chips" });
+    const intentLine = h("p", { class: "bk-intent" }, selected.agentIntent);
+    const metaLine = h("p", { class: "bk-meta" }, bkMeta(selected));
+    const errLine = h("p", { class: "bk-error", style: { display: "none" } });
+    const runBtn = h("button", { class: "btn btn-primary bk-run", onClick: () => run() }, "Initiate transfer");
+
+    function refreshChips() {
+      chipRow.innerHTML = "";
+      SCENARIOS.forEach((s) => {
+        chipRow.appendChild(h("button", {
+          class: "chip", "aria-pressed": s.id === selected.id ? "true" : "false",
+          onClick: () => {
+            if (running) return;
+            selected = s;
+            intentLine.textContent = s.agentIntent;
+            metaLine.textContent = bkMeta(s);
+            errLine.style.display = "none";
+            refreshChips();
+            buildRail();
+          },
+        }, s.label));
+      });
+    }
+    refreshChips();
+
+    view.appendChild(h("div", { class: "card" },
+      h("div", { class: "card-body" },
+        h("div", { class: "bk-control-label" }, "The agent wants to"),
+        chipRow, intentLine, metaLine, runBtn, errLine,
+      ),
+    ));
+
+    const rail = h("div", { class: "bk-rail" });
+    view.appendChild(rail);
+
+    view.appendChild(h("p", { class: "bk-foot" },
+      "Stage four runs live against the gateway and writes a real audit row. The other five layers are illustrative: the demo names the vendors that work at each layer but does not call them. The bank is a mock of the Open Bank Project v5.1.0 API, so the account read returns a clean account while the sanctions hold sits in account attributes the read never returns."));
+
+    let stageEls = [];
+    function buildRail() {
+      rail.innerHTML = "";
+      stageEls = STAGES.map((stage) => {
+        const dot = h("span", { class: "bk-dot" });
+        const outcome = h("p", { class: "bk-outcome" });
+        const panelHost = h("div", {});
+        const card = h("div", { class: "bk-stage", dataset: { status: "pending", coco: stage.coco ? "true" : "false" } },
+          h("span", { class: "bk-num" }, String(stage.n)),
+          h("div", { class: "bk-stage-main" },
+            h("div", { class: "bk-stage-head" },
+              h("h3", { class: "bk-stage-title" }, stage.title),
+              dot,
+            ),
+            h("p", { class: "bk-role" }, stage.role),
+            h("div", { class: "bk-vendors" }, ...stage.vendors.map((v) =>
+              h("span", { class: "bk-vendor", dataset: { coco: stage.coco ? "true" : "false" },
+                title: stage.coco ? "" : "Illustrative. The demo does not call this vendor." }, v))),
+            outcome, panelHost,
+          ),
+        );
+        rail.appendChild(card);
+        return { stage, card, dot, outcome, panelHost };
+      });
+    }
+    buildRail();
+
+    function applyStep(step, decision) {
+      stageEls.forEach((el, i) => {
+        const status = step > i ? "done" : step === i ? "active" : "pending";
+        el.card.dataset.status = status;
+        if (el.stage.coco) {
+          el.card.dataset.verdict = decision ? decision.verdict : "";
+          el.panelHost.innerHTML = "";
+          if (decision && step >= i) el.panelHost.appendChild(renderStage4Panel(decision));
+        } else {
+          el.outcome.textContent = status === "done"
+            ? stageOutcome(el.stage.key, decision ? decision.verdict : "ALLOW", decision ? decision.audit_id : null)
+            : "";
+        }
+      });
+    }
+
+    function renderStage4Panel(d) {
+      const balance = Number(d.account_view.balance.amount);
+      const obpCard = h("div", { class: "bk-panel-card" },
+        h("p", { class: "bk-panel-label" }, "OBP transaction API"),
+        h("p", { class: "bk-balance" }, money(balance, d.account_view.balance.currency)),
+        h("p", { class: "bk-sub" }, `${d.account_view.label} · available`),
+        h("div", { class: "bk-obp-status" }, h("span", { class: "bk-obp-dot" }), d.obp_view.status),
+        h("p", { class: "bk-note" }, d.obp_view.note),
+      );
+      const checksCard = h("div", { class: "bk-panel-card", dataset: { v: d.verdict } },
+        h("p", { class: "bk-panel-label" }, "Live account state Coco read"),
+        h("div", { class: "bk-checks" }, ...d.checks.map((c) =>
+          h("div", { class: "bk-check" },
+            h("span", { class: c.passed ? "bk-check-label" : "bk-check-label bk-fail" }, CHECK_LABELS[c.check_id] || c.check_id),
+            h("span", { class: c.passed ? "bk-check-flag" : "bk-check-flag bk-fail" }, c.passed ? "pass" : "fail"),
+          ))),
+      );
+      const banner = h("div", { class: "bk-verdict-banner", dataset: { v: d.verdict } },
+        h("span", { class: "verdict verdict-lg", "data-v": d.verdict }, d.verdict),
+        h("span", { class: "bk-reason" }, d.primary_reason),
+      );
+      const ts = new Date(d.timestamp);
+      const tstr = Number.isNaN(ts.getTime()) ? d.timestamp : ts.toLocaleTimeString();
+      const audit = h("p", { class: "bk-audit" }, `audit #${d.audit_id != null ? d.audit_id : "—"} · ${tstr} · pack banking.wire_transfer`);
+      return h("div", { class: "bk-panel" }, h("div", { class: "bk-panel-grid" }, obpCard, checksCard), banner, audit);
+    }
+
+    async function run() {
+      if (running) return;
+      running = true;
+      runBtn.disabled = true;
+      errLine.style.display = "none";
+      buildRail();
+      applyStep(0, null);
+
+      let decision;
+      try {
+        decision = await api.fetchJson("/api/demo/bank_transfer", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ account_id: selected.accountId, payee: selected.payee, amount: selected.amount, currency: selected.currency }),
+        });
+      } catch (e) {
+        errLine.textContent = e && e.message ? e.message : "Cannot reach the gateway.";
+        errLine.style.display = "";
+        running = false;
+        runBtn.disabled = false;
+        return;
+      }
+
+      for (let i = 0; i <= STAGES.length; i++) {
+        applyStep(i, decision);
+        await sleep(i === 3 ? 950 : 650);
+      }
+      running = false;
+      runBtn.disabled = false;
+    }
   };
 
   /* =================================================================

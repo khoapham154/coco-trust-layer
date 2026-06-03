@@ -1,0 +1,63 @@
+{
+  "bank_id": "coco-demo-bank",
+  "view_id": "owner",
+  "accounts": {
+    "operating-au-001": {
+      "account": {
+        "id": "operating-au-001",
+        "label": "Operating Account",
+        "number": "100200300",
+        "type": "current",
+        "balance": { "currency": "USD", "amount": "842500.00" },
+        "IBAN": "AU89 3704 0044 0532 0130 00",
+        "swift_bic": "COCOAU2S",
+        "bank_id": "coco-demo-bank",
+        "owners": [{ "id": "co-ops", "display_name": "Coco Demo Pty Ltd" }]
+      },
+      "account_attributes": [
+        { "name": "status", "type": "STRING", "value": "active" },
+        { "name": "sanctions_hold", "type": "STRING", "value": "false" },
+        { "name": "daily_limit", "type": "DOUBLE", "value": "500000" },
+        { "name": "approved_beneficiaries", "type": "STRING", "value": "PayCycle Payroll Pty Ltd,Atlassian Pty Ltd,AWS EMEA SARL" }
+      ]
+    },
+    "treasury-002": {
+      "account": {
+        "id": "treasury-002",
+        "label": "Treasury Account",
+        "number": "900800700",
+        "type": "current",
+        "balance": { "currency": "USD", "amount": "12480000.00" },
+        "IBAN": "AU61 1234 5678 9012 3456 78",
+        "swift_bic": "COCOAU2S",
+        "bank_id": "coco-demo-bank",
+        "owners": [{ "id": "co-treasury", "display_name": "Coco Demo Pty Ltd" }]
+      },
+      "account_attributes": [
+        { "name": "status", "type": "STRING", "value": "active" },
+        { "name": "sanctions_hold", "type": "STRING", "value": "true" },
+        { "name": "daily_limit", "type": "DOUBLE", "value": "5000000" },
+        { "name": "approved_beneficiaries", "type": "STRING", "value": "Northwind Capital LLC,Stripe Payments Australia" }
+      ]
+    },
+    "payments-003": {
+      "account": {
+        "id": "payments-003",
+        "label": "Payments Account",
+        "number": "500400300",
+        "type": "current",
+        "balance": { "currency": "USD", "amount": "3200000.00" },
+        "IBAN": "AU33 2233 4455 6677 8899 00",
+        "swift_bic": "COCOAU2S",
+        "bank_id": "coco-demo-bank",
+        "owners": [{ "id": "co-payments", "display_name": "Coco Demo Pty Ltd" }]
+      },
+      "account_attributes": [
+        { "name": "status", "type": "STRING", "value": "active" },
+        { "name": "sanctions_hold", "type": "STRING", "value": "false" },
+        { "name": "daily_limit", "type": "DOUBLE", "value": "1000000" },
+        { "name": "approved_beneficiaries", "type": "STRING", "value": "Meridian Logistics Ltd,Telstra Corporation,Google Cloud EMEA" }
+      ]
+    }
+  }
+}

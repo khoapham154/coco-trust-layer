@@ -16,12 +16,18 @@ tmux send-keys -t coco_gateway \
    uvicorn main:app --app-dir backend --host 0.0.0.0 --port 8080 --reload' Enter
 
 curl -s localhost:8080/health | jq
-curl -s localhost:8080/api/packs | jq 'length'         # → 5
+curl -s localhost:8080/api/packs | jq 'length'         # → 6 (5 Twenty + 1 banking)
 curl -s localhost:8080/api/scenarios | jq 'length'     # → 19
 
 open http://localhost:8080/dashboard
+open http://localhost:8080/dashboard#/banking          # agent-banking pipeline demo
 open http://localhost:8080/sandbox/twenty
 ```
+
+The gateway loads packs from `data/twenty/packs` and `data/banking/packs`
+together, so the dashboard serves the Twenty governance views and the
+Agent Banking demo from one process. The banking demo drives the live
+`banking.wire_transfer` pack through `POST /api/demo/bank_transfer`.
 
 `PYTHONPATH` points at the repo root so the gateway can import `agents`
 and `providers` when a scenario runs with `driver=twenty`.

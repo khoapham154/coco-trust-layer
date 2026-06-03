@@ -33,17 +33,18 @@ def test_health_returns_ok(client):
     assert r.status_code == 200
     data = r.json()
     assert data["status"] == "ok"
-    assert data["packs_loaded"] == 5
+    assert data["packs_loaded"] == 6
 
 
-def test_list_packs_returns_five(client):
+def test_list_packs_includes_twenty_and_banking(client):
     r = client.get("/api/packs")
     assert r.status_code == 200
     data = r.json()
-    assert len(data) == 5
+    assert len(data) == 6
     ids = {p["id"] for p in data}
     assert "twenty.deal_stage_move" in ids
     assert "twenty.bulk_email" in ids
+    assert "banking.wire_transfer" in ids
 
 
 def test_get_pack_detail(client):
