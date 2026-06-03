@@ -51,7 +51,10 @@ class BankStateProvider:
         client: Optional[httpx.Client] = None,
         timeout: float = 10.0,
     ):
-        port = os.environ.get("COCO_PORT", "8080")
+        # Self-call target: prefer COCO_PORT, then the platform's PORT (Render
+        # injects it), then the local default. Keeps the mock-OBP round-trip
+        # working wherever the gateway listens.
+        port = os.environ.get("COCO_PORT") or os.environ.get("PORT") or "8080"
         self.base_url = (base_url or os.environ.get("COCO_GATEWAY_URL", f"http://localhost:{port}")).rstrip("/")
         self.bank_id = bank_id
         self.view_id = view_id
