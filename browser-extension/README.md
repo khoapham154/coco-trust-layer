@@ -3,7 +3,7 @@
 Auto-injects the Coco SDK into matching Twenty CRM tabs, talking to a
 locally running Coco gateway on `http://localhost:8080` by default.
 
-Replaces the old bookmarklet flow — install once, always on.
+Replaces the old bookmarklet flow. Install once, always on.
 
 ## Install
 
@@ -59,8 +59,8 @@ in local Chrome. The tunnels make it look like everything runs locally.
 ```
 manifest.json          MV3 manifest
 assets/                16/48/128-px icons
-src/background.js      service worker — health polling, SDK injection
-src/content-script.js  content script — requests inject from background
+src/background.js      service worker: health polling, SDK injection
+src/content-script.js  content script: requests inject from background
 src/popup.html|.js     toolbar popup (gateway URL, on/off, health)
 src/options.html|.js   full settings page
 src/styles.css         shared popup + options styling
