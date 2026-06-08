@@ -25,10 +25,15 @@ import httpx
 log = logging.getLogger("coco.providers.bank")
 
 _FIXTURES_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "banking" / "accounts.json"
+_RESOURCES_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "banking" / "resources.json"
 
 
 def _fixtures() -> Dict[str, Any]:
     return json.loads(_FIXTURES_PATH.read_text(encoding="utf-8"))
+
+
+def _resources() -> Dict[str, Any]:
+    return json.loads(_RESOURCES_PATH.read_text(encoding="utf-8"))
 
 
 def _as_bool(value: Any) -> bool:
@@ -104,6 +109,86 @@ class BankStateProvider:
         }
         return ui_state, account
 
+    def beneficiary_state(
+        self,
+        account_id: str,
+        counterparty_id: str,
+    ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+        """Return ``(ui_state, counterparty_view)`` for ``banking.add_beneficiary``.
+
+        The screening result and jurisdiction tier come from the counterparty
+        record, which the agent's add request never carries.
+        """
+        account = self._fetch(account_id)
+        acct_attrs = _flatten_attributes(account["account_attributes"])
+
+        record = self._fetch_resource("counterparties", counterparty_id)
+        cp = record["counterparty"]
+        cp_attrs = _flatten_attributes(record["counterparty_attributes"])
+
+        ui_state = {
+            "account": {"status": acct_attrs.get("status", "active")},
+            "counterparty": {
+                "name": cp.get("name"),
+                "jurisdiction": cp.get("jurisdiction"),
+                "screening_cleared": _as_bool(cp_attrs.get("screening_cleared")),
+                "jurisdiction_sanctioned": _as_bool(cp_attrs.get("jurisdiction_sanctioned")),
+                "first_time_in_monitored_region": _as_bool(cp_attrs.get("first_time_in_monitored_region")),
+            },
+        }
+        return ui_state, cp
+
+    def card_state(
+        self,
+        card_id: str,
+        requested_limit: float,
+        *,
+        currency: str = "USD",
+    ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+        """Return ``(ui_state, card_view)`` for ``banking.card_controls``."""
+        record = self._fetch_resource("cards", card_id)
+        card = record["card"]
+        attrs = _flatten_attributes(record["card_attributes"])
+
+        ui_state = {
+            "card": {
+                "id": card.get("card_id"),
+                "label": card.get("label"),
+                "status": card.get("status", "active"),
+                "reported_lost": _as_bool(attrs.get("reported_lost")),
+                "current_limit": float(attrs.get("current_limit", 0) or 0),
+            },
+            "request": {"requested_limit": float(requested_limit), "currency": currency},
+        }
+        return ui_state, card
+
+    def data_export_state(
+        self,
+        dataset_id: str,
+        purpose_declared: bool,
+        record_count: int,
+        cross_border: bool,
+    ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+        """Return ``(ui_state, dataset_view)`` for ``banking.data_export``.
+
+        The export switch comes from the dataset; the purpose, volume and
+        destination come from the agent's request.
+        """
+        record = self._fetch_resource("datasets", dataset_id)
+        dataset = record["dataset"]
+        attrs = _flatten_attributes(record["dataset_attributes"])
+
+        ui_state = {
+            "policy": {"exports_enabled": _as_bool(attrs.get("exports_enabled"))},
+            "request": {
+                "purpose_declared": bool(purpose_declared),
+                "record_count": int(record_count),
+                "cross_border": bool(cross_border),
+                "dataset": dataset_id,
+            },
+        }
+        return ui_state, dataset
+
     # --- fetch with fixtures fallback --------------------------------
 
     def _fetch(self, account_id: str) -> Dict[str, Any]:
@@ -117,6 +202,21 @@ class BankStateProvider:
             record = _fixtures().get("accounts", {}).get(account_id)
             if record is None:
                 raise KeyError(f"Unknown demo account: {account_id}") from exc
+            return record
+
+    def _fetch_resource(self, collection: str, key: str) -> Dict[str, Any]:
+        """Read a banking resource (counterparty, card, dataset) by id.
+
+        Hits the mock OBP route, falling back to the fixtures file if the
+        round-trip fails, the same way the account read does.
+        """
+        try:
+            return self._get(f"/mock-obp/v5.1.0/banks/{self.bank_id}/{collection}/{key}")
+        except httpx.HTTPError as exc:
+            log.warning("mock OBP fetch failed (%s) — reading fixtures directly", exc)
+            record = _resources().get(collection, {}).get(key)
+            if record is None:
+                raise KeyError(f"Unknown demo {collection}: {key}") from exc
             return record
 
     def _get(self, path: str) -> Dict[str, Any]:

@@ -52,9 +52,9 @@ for i in $(seq 1 20); do
 done
 curl -fsS --max-time 2 "${GATEWAY_URL}/health" >/dev/null || fail "gateway never came up — check ${TMP_LOG}"
 
-# only the banking pack is loaded
+# only the banking packs are loaded (wire transfer + beneficiary + card + data export)
 PACKS="$(curl -s "${GATEWAY_URL}/health" | jq -r '.packs_loaded')"
-[[ "${PACKS}" == "1" ]] && pass "banking pack loaded (packs_loaded=1)" || fail "expected 1 pack, got ${PACKS}"
+[[ "${PACKS}" == "4" ]] && pass "banking packs loaded (packs_loaded=4)" || fail "expected 4 packs, got ${PACKS}"
 
 # mock OBP account read is clean, the hold lives in attributes
 ACCOUNT="$(curl -s "${GATEWAY_URL}/mock-obp/v5.1.0/banks/coco-demo-bank/accounts/treasury-002/owner/account")"
@@ -80,8 +80,31 @@ check_verdict "payroll 5k"        "operating-au-001" "PayCycle Payroll Pty Ltd" 
 check_verdict "sanctioned 2M"     "treasury-002"     "Hint Global Trading FZE"  2000000  "BLOCK"
 check_verdict "vendor 250k"       "payments-003"     "Meridian Logistics Ltd"   250000   "ESCALATE"
 
-# audit grew by three rows
+# a mock OBP counterparty read carries the screening attribute the request omits
+CP="$(curl -s "${GATEWAY_URL}/mock-obp/v5.1.0/banks/coco-demo-bank/counterparties/sterling-offshore")"
+echo "${CP}" | jq -e '.counterparty_attributes[] | select(.name=="jurisdiction_sanctioned") | .value == "true"' >/dev/null \
+  && pass "counterparty read carries the jurisdiction flag" || fail "counterparty read missing the jurisdiction flag"
+
+# the other three governed actions
+check_post() {
+  local label="$1" endpoint="$2" json="$3" expected="$4"
+  local got
+  got="$(curl -s -X POST "${GATEWAY_URL}${endpoint}" -H 'Content-Type: application/json' -d "${json}" | jq -r '.verdict')"
+  [[ "${got}" == "${expected}" ]] && pass "${label}: ${got}" || fail "${label}: expected ${expected}, got ${got}"
+}
+
+check_post "beneficiary clean"     "/api/demo/add_beneficiary" '{"account_id":"operating-au-001","counterparty_id":"brightwave-au"}'     "ALLOW"
+check_post "beneficiary sanctioned" "/api/demo/add_beneficiary" '{"account_id":"operating-au-001","counterparty_id":"sterling-offshore"}' "BLOCK"
+check_post "beneficiary first-time" "/api/demo/add_beneficiary" '{"account_id":"operating-au-001","counterparty_id":"kepler-fze"}'        "ESCALATE"
+check_post "card limit 20k"        "/api/demo/card_limit"      '{"card_id":"card-ops-01","requested_limit":20000}'                       "ALLOW"
+check_post "card reported lost"    "/api/demo/card_limit"      '{"card_id":"card-travel-09","requested_limit":10000}'                    "BLOCK"
+check_post "card limit 250k"       "/api/demo/card_limit"      '{"card_id":"card-exec-02","requested_limit":250000}'                     "ESCALATE"
+check_post "export with purpose"   "/api/demo/data_export"     '{"dataset_id":"crm-contacts","purpose_declared":true,"record_count":200,"cross_border":false}'   "ALLOW"
+check_post "export no purpose"     "/api/demo/data_export"     '{"dataset_id":"crm-contacts","purpose_declared":false,"record_count":200,"cross_border":false}'  "BLOCK"
+check_post "export bulk"           "/api/demo/data_export"     '{"dataset_id":"crm-contacts","purpose_declared":true,"record_count":12000,"cross_border":false}' "ESCALATE"
+
+# audit grew by the twelve posted decisions
 ROWS="$(curl -s "${GATEWAY_URL}/api/audit?limit=50" | jq 'length')"
-[[ "${ROWS}" -ge 3 ]] && pass "audit log has ${ROWS} rows" || fail "expected at least 3 audit rows, got ${ROWS}"
+[[ "${ROWS}" -ge 12 ]] && pass "audit log has ${ROWS} rows" || fail "expected at least 12 audit rows, got ${ROWS}"
 
 pass "banking backend smoke complete"

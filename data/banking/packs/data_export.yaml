@@ -1,0 +1,30 @@
+id: banking.data_export
+action: export_customer_records
+description: >
+  Governs an agent exporting customer records. The dataset must allow export
+  at all, every export needs a declared business purpose, a bulk pull is held
+  for a data-protection review, and a cross-border export is held as well. The
+  export switch comes from the dataset, not from the agent's assertion that the
+  pull is routine.
+
+pre_conditions:
+  - id: exports_enabled
+    type: equals
+    path: policy.exports_enabled
+    value: true
+    on_fail: BLOCK
+    reason: Customer-data export is disabled for this dataset
+
+constraints:
+  - id: purpose_declared
+    rule: request.purpose_declared == true
+    on_fail: BLOCK
+    reason: Export request has no declared business purpose
+  - id: volume_within_limit
+    rule: request.record_count <= 5000
+    on_fail: ESCALATE
+    reason: Bulk exports over 5000 records need a data-protection review
+  - id: domestic_only
+    rule: request.cross_border == false
+    on_fail: ESCALATE
+    reason: Cross-border customer-data export needs a data-protection review

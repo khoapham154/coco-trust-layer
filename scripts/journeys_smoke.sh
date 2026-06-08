@@ -19,7 +19,7 @@ section() { printf "\n${CYAN}== %s ==${NC}\n" "$1"; }
 section "Journey A — install / connectivity"
 curl -sf "$BASE/health" >/dev/null && pass "/health responds"
 PACKS_LOADED=$(curl -s "$BASE/health" | python -c "import sys,json; print(json.load(sys.stdin)['packs_loaded'])")
-[[ "$PACKS_LOADED" == "6" ]] && pass "6 packs loaded" || fail "expected 6 packs, got $PACKS_LOADED"
+[[ "$PACKS_LOADED" == "9" ]] && pass "9 packs loaded" || fail "expected 9 packs, got $PACKS_LOADED"
 curl -sf "$BASE/sdk/coco-sdk.js" >/dev/null && pass "/sdk/coco-sdk.js serves"
 curl -sf "$BASE/sdk/inject.js" >/dev/null && pass "/sdk/inject.js serves"
 curl -sf "$BASE/dashboard" >/dev/null && pass "/dashboard serves"

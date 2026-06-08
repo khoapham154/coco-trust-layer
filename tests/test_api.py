@@ -11,6 +11,9 @@ import os
 
 # Ensure test DB is isolated from dev DB.
 os.environ["COCO_DB_PATH"] = "/tmp/coco_test_audit.db"
+# Point the bank provider's self-call at an unreachable port so the banking
+# demo endpoints fall back to fixtures deterministically (no listener needed).
+os.environ["COCO_GATEWAY_URL"] = "http://127.0.0.1:9"
 
 import pytest
 from fastapi.testclient import TestClient
@@ -33,18 +36,21 @@ def test_health_returns_ok(client):
     assert r.status_code == 200
     data = r.json()
     assert data["status"] == "ok"
-    assert data["packs_loaded"] == 6
+    assert data["packs_loaded"] == 9
 
 
 def test_list_packs_includes_twenty_and_banking(client):
     r = client.get("/api/packs")
     assert r.status_code == 200
     data = r.json()
-    assert len(data) == 6
+    assert len(data) == 9
     ids = {p["id"] for p in data}
     assert "twenty.deal_stage_move" in ids
     assert "twenty.bulk_email" in ids
     assert "banking.wire_transfer" in ids
+    assert "banking.add_beneficiary" in ids
+    assert "banking.card_controls" in ids
+    assert "banking.data_export" in ids
 
 
 def test_get_pack_detail(client):
@@ -144,3 +150,64 @@ def test_audit_list(client):
     assert isinstance(data, list)
     assert len(data) >= 1
     assert "verdict" in data[0]
+
+
+# --- banking demo endpoints (state read falls back to fixtures here) ------
+
+
+def test_demo_add_beneficiary_allow(client):
+    r = client.post(
+        "/api/demo/add_beneficiary",
+        json={"account_id": "operating-au-001", "counterparty_id": "brightwave-au"},
+    )
+    assert r.status_code == 200
+    data = r.json()
+    assert data["verdict"] == "ALLOW"
+    assert data["pack_id"] == "banking.add_beneficiary"
+
+
+def test_demo_add_beneficiary_block_sanctioned(client):
+    r = client.post(
+        "/api/demo/add_beneficiary",
+        json={"account_id": "operating-au-001", "counterparty_id": "sterling-offshore"},
+    )
+    assert r.status_code == 200
+    data = r.json()
+    assert data["verdict"] == "BLOCK"
+    assert "jurisdiction" in data["primary_reason"].lower()
+
+
+def test_demo_card_limit_escalate(client):
+    r = client.post(
+        "/api/demo/card_limit",
+        json={"card_id": "card-exec-02", "requested_limit": 250000},
+    )
+    assert r.status_code == 200
+    assert r.json()["verdict"] == "ESCALATE"
+
+
+def test_demo_card_limit_block_reported(client):
+    r = client.post(
+        "/api/demo/card_limit",
+        json={"card_id": "card-travel-09", "requested_limit": 10000},
+    )
+    assert r.status_code == 200
+    assert r.json()["verdict"] == "BLOCK"
+
+
+def test_demo_data_export_block_no_purpose(client):
+    r = client.post(
+        "/api/demo/data_export",
+        json={"dataset_id": "crm-contacts", "purpose_declared": False, "record_count": 200, "cross_border": False},
+    )
+    assert r.status_code == 200
+    assert r.json()["verdict"] == "BLOCK"
+
+
+def test_demo_data_export_escalate_bulk(client):
+    r = client.post(
+        "/api/demo/data_export",
+        json={"dataset_id": "crm-contacts", "purpose_declared": True, "record_count": 12000, "cross_border": False},
+    )
+    assert r.status_code == 200
+    assert r.json()["verdict"] == "ESCALATE"

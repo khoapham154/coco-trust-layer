@@ -376,6 +376,7 @@
         { label: "Integrations", href: "#/integrations", kind: "view" },
         { label: "Settings", href: "#/settings", kind: "view" },
         { label: "Agent Banking", href: "#/banking", kind: "view" },
+        { label: "Agent actions", href: "#/actions", kind: "view" },
       ];
       (state.packs || []).forEach((p) => items.push({ label: p.id, href: `#/packs/${encodeURIComponent(p.id)}`, kind: "pack" }));
       (state.scenarios || []).forEach((s) => items.push({ label: s.id, href: `#/packs/${encodeURIComponent(s.pack_id)}?run=${encodeURIComponent(s.id)}`, kind: "scenario" }));
@@ -396,7 +397,21 @@
     escalations: [],
     driver: "engine",
     lastView: null,
+    workspace: (() => { try { return localStorage.getItem("coco.workspace") || "twenty"; } catch (_) { return "twenty"; } })(),
   };
+
+  // Workspaces let one gateway present more than one governed workflow.
+  // Each maps to a company and the pack-id prefix that scopes its views.
+  const WORKSPACES = [
+    { id: "twenty", label: "Twenty CRM", prefix: "twenty.", home: "live" },
+    { id: "banking", label: "Agent Bank", prefix: "banking.", home: "banking" },
+  ];
+  function currentWorkspace() {
+    return WORKSPACES.find((w) => w.id === state.workspace) || WORKSPACES[0];
+  }
+  function inWorkspace(packId) {
+    return typeof packId === "string" && packId.startsWith(currentWorkspace().prefix);
+  }
 
   function parseHash() {
     const raw = (location.hash || "#/live").replace(/^#\/?/, "");
@@ -434,6 +449,7 @@
     const root = $("#view-root");
     if (!root) return;
     state.lastView = route;
+    syncWorkspaceToRoute(route);
     $$(".nav-item").forEach((el) => {
       el.toggleAttribute("aria-current", el.dataset.route === route);
       if (el.dataset.route === route) el.setAttribute("aria-current", "page");
@@ -508,7 +524,7 @@
     });
     const packSelect = h("select", { class: "select", style: { width: "auto", maxWidth: 220 } });
     packSelect.appendChild(h("option", { value: "" }, "All packs"));
-    (state.packs || []).forEach((p) => packSelect.appendChild(h("option", { value: p.id }, p.id)));
+    (state.packs || []).filter((p) => inWorkspace(p.id)).forEach((p) => packSelect.appendChild(h("option", { value: p.id }, p.id)));
     packSelect.value = params.pack || "";
     packSelect.addEventListener("change", (e) => { setQuery({ pack: e.target.value }, { replace: true }); renderFeed(); });
 
@@ -539,30 +555,22 @@
     }
 
     function renderTiles() {
+      // Tiles are scoped to the active workspace so each company's numbers
+      // match its own feed. Latency stays a platform metric.
       const m = state.metrics || {};
+      const rows = (state.audit || []).filter((r) => inWorkspace(r.pack_id));
+      const total = rows.length;
+      const blocks = rows.filter((r) => r.verdict === "BLOCK").length;
+      const escPending = (state.escalations || []).filter((e) => inWorkspace(e.pack_id)).length;
       tileRow.innerHTML = "";
-      tileRow.appendChild(tile({
-        label: "Verdicts · last hour",
-        value: fmtNum(m.verdicts_1h),
-        unit: "",
-        sparkline: m.verdicts_24h_buckets,
-      }));
-      tileRow.appendChild(tile({
-        label: "Block rate · 1h",
-        value: fmtPct(m.block_rate_1h, 0),
-        delta: m.block_rate_delta,
-        deltaFormat: "pct",
-      }));
-      tileRow.appendChild(tile({
-        label: "p95 latency",
-        value: fmtNum(m.latency_p95_ms),
-        unit: "ms",
-      }));
+      tileRow.appendChild(tile({ label: "Verdicts · recent", value: fmtNum(total) }));
+      tileRow.appendChild(tile({ label: "Block rate", value: fmtPct(total ? blocks / total : 0, 0) }));
+      tileRow.appendChild(tile({ label: "p95 latency", value: fmtNum(m.latency_p95_ms), unit: "ms" }));
       tileRow.appendChild(tile({
         label: "Escalations pending",
-        value: fmtNum(m.escalations_pending),
+        value: fmtNum(escPending),
         link: "#/escalations",
-        emphasis: (m.escalations_pending || 0) > 0,
+        emphasis: escPending > 0,
       }));
     }
 
@@ -573,6 +581,7 @@
       const q = (params2.q || "").trim().toLowerCase();
 
       const rows = (state.audit || []).filter((r) => {
+        if (!inWorkspace(r.pack_id)) return false;
         if (verdictFilter.length && !verdictFilter.includes(r.verdict)) return false;
         if (packFilter && r.pack_id !== packFilter) return false;
         if (q && !(r.primary_reason || "").toLowerCase().includes(q) && !(r.pack_id || "").toLowerCase().includes(q)) return false;
@@ -825,14 +834,15 @@
 
     function renderList() {
       list.innerHTML = "";
-      if (!state.escalations.length) {
+      const items = (state.escalations || []).filter((e) => inWorkspace(e.pack_id));
+      if (!items.length) {
         list.appendChild(h("div", { class: "empty" },
           h("h3", {}, "Nothing pending"),
           h("p", {}, "When the gateway escalates an action, it shows up here for a human decision."),
         ));
         return;
       }
-      state.escalations.forEach((e) => list.appendChild(renderEscalationCard(e, loadEscalations)));
+      items.forEach((e) => list.appendChild(renderEscalationCard(e, loadEscalations)));
     }
 
     await loadEscalations();
@@ -929,7 +939,7 @@
     function renderSide() {
       $$(".pack-list-item", sideList).forEach((el) => el.remove());
       const q = (parseHash().params.q || "").toLowerCase();
-      const filtered = state.packs.filter((p) => !q || p.id.toLowerCase().includes(q) || (p.description || "").toLowerCase().includes(q));
+      const filtered = state.packs.filter((p) => inWorkspace(p.id) && (!q || p.id.toLowerCase().includes(q) || (p.description || "").toLowerCase().includes(q)));
       filtered.forEach((p) => {
         const item = h("a", {
           class: "pack-list-item",
@@ -1114,7 +1124,7 @@
 
     const packSel = h("select", { class: "select", style: { width: "auto", maxWidth: 220 } });
     packSel.appendChild(h("option", { value: "" }, "All packs"));
-    (state.packs || []).forEach((p) => packSel.appendChild(h("option", { value: p.id }, p.id)));
+    (state.packs || []).filter((p) => inWorkspace(p.id)).forEach((p) => packSel.appendChild(h("option", { value: p.id }, p.id)));
     packSel.value = params.pack || "";
     packSel.addEventListener("change", (e) => { setQuery({ pack: e.target.value }, { replace: true }); loadAudit(); });
     fb.appendChild(packSel);
@@ -1186,6 +1196,7 @@
     }
 
     function renderRows(rows) {
+      rows = (rows || []).filter((r) => inWorkspace(r.pack_id));
       const body = $("#audit-body");
       body.innerHTML = "";
       if (!rows.length) {
@@ -1623,9 +1634,210 @@
     }
   };
 
+  /* ---- 8.10 AGENT ACTIONS (other governed banking actions) ------- */
+
+  routes.actions = async function (root) {
+    // The wire transfer is the hero pipeline. These are the other actions an
+    // agent takes against the bank. Each runs live against the gateway and
+    // writes a real audit row, the same engine the pipeline uses.
+    const ACTIONS = [
+      {
+        key: "add_beneficiary",
+        title: "Add a beneficiary",
+        endpoint: "/api/demo/add_beneficiary",
+        sub: "Before an agent can pay a new party it has to add it. Coco screens the payee against sanctions and jurisdiction rules first, because a new beneficiary is the usual first step in a payment-fraud sequence.",
+        labels: { account_active: "Source account active", screening_cleared: "Cleared sanctions and name screening", jurisdiction_allowed: "Jurisdiction is permitted", known_or_low_risk: "Known or low-risk payee" },
+        scenarios: [
+          { id: "clean", label: "Add a screened AU supplier", intent: "Add Brightwave Studios as a payee.", body: { account_id: "operating-au-001", counterparty_id: "brightwave-au" } },
+          { id: "sanctioned", label: "Add a sanctioned-jurisdiction entity", intent: "Add Sterling Offshore Holdings as a payee.", body: { account_id: "operating-au-001", counterparty_id: "sterling-offshore" } },
+          { id: "first-time", label: "Add a first-time payee in a monitored region", intent: "Add Kepler Trading FZE as a payee.", body: { account_id: "operating-au-001", counterparty_id: "kepler-fze" } },
+        ],
+      },
+      {
+        key: "card_controls",
+        title: "Change a card limit",
+        endpoint: "/api/demo/card_limit",
+        sub: "The agent raises a corporate card's spending limit. A card reported lost is blocked outright, and a rise above the programme ceiling is held for a manager.",
+        labels: { card_active: "Card is active", card_not_reported: "Card not reported lost", limit_within_ceiling: "Within the limit ceiling" },
+        scenarios: [
+          { id: "ok", label: "Raise the Operations card to 20,000", intent: "Raise the Operations Visa limit to 20,000.", body: { card_id: "card-ops-01", requested_limit: 20000 } },
+          { id: "lost", label: "Change a card reported lost", intent: "Raise the Travel Mastercard limit to 10,000.", body: { card_id: "card-travel-09", requested_limit: 10000 } },
+          { id: "high", label: "Raise a card to 250,000", intent: "Raise the Executive Visa limit to 250,000.", body: { card_id: "card-exec-02", requested_limit: 250000 } },
+        ],
+      },
+      {
+        key: "data_export",
+        title: "Export customer records",
+        endpoint: "/api/demo/data_export",
+        sub: "The agent pulls customer records. Every export needs a stated business purpose, and a bulk or cross-border pull is held for a data-protection review.",
+        labels: { exports_enabled: "Dataset allows export", purpose_declared: "Business purpose declared", volume_within_limit: "Volume within the auto limit", domestic_only: "Domestic export" },
+        scenarios: [
+          { id: "ok", label: "Export 200 contacts with a purpose", intent: "Export 200 CRM contacts for the Q3 campaign.", body: { dataset_id: "crm-contacts", purpose_declared: true, record_count: 200, cross_border: false } },
+          { id: "no-purpose", label: "Export with no stated purpose", intent: "Export 200 CRM contacts.", body: { dataset_id: "crm-contacts", purpose_declared: false, record_count: 200, cross_border: false } },
+          { id: "bulk", label: "Export 12,000 records", intent: "Export 12,000 CRM contacts for analysis.", body: { dataset_id: "crm-contacts", purpose_declared: true, record_count: 12000, cross_border: false } },
+        ],
+      },
+    ];
+
+    function renderResult(d, labels) {
+      const banner = h("div", { class: "bk-verdict-banner", dataset: { v: d.verdict } },
+        h("span", { class: "verdict verdict-lg", "data-v": d.verdict }, d.verdict),
+        h("span", { class: "bk-reason" }, d.primary_reason),
+      );
+      const checks = h("div", { class: "bk-checks" }, ...(d.checks || []).map((c) =>
+        h("div", { class: "bk-check" },
+          h("span", { class: c.passed ? "bk-check-label" : "bk-check-label bk-fail" }, labels[c.check_id] || c.check_id),
+          h("span", { class: c.passed ? "bk-check-flag" : "bk-check-flag bk-fail" }, c.passed ? "pass" : "fail"),
+        )));
+      const ts = new Date(d.timestamp);
+      const tstr = Number.isNaN(ts.getTime()) ? d.timestamp : ts.toLocaleTimeString();
+      const line = `audit #${d.audit_id != null ? d.audit_id : "—"} · ${tstr} · ${d.pack_id}`;
+      const audit = d.audit_id != null
+        ? h("a", { class: "bk-audit", href: `#/audit?id=${d.audit_id}` }, line)
+        : h("p", { class: "bk-audit" }, line);
+      return h("div", { class: "bk-action-result" }, banner, checks, audit);
+    }
+
+    const view = h("div", { class: "view" });
+    root.appendChild(view);
+    view.appendChild(h("div", { class: "view-head" },
+      h("div", {},
+        h("h1", { class: "view-title" }, "Agent actions"),
+        h("p", { class: "view-sub" }, "Coco governs more than wires. Pick what the agent tries below: the gateway reads the live record and rules allow, block or escalate before it executes, then writes the verdict to the audit ledger."),
+      ),
+    ));
+
+    ACTIONS.forEach((a) => {
+      let selected = a.scenarios[0];
+      let running = false;
+      const chipRow = h("div", { class: "bk-chips" });
+      const intentLine = h("p", { class: "bk-intent" }, selected.intent);
+      const errLine = h("p", { class: "bk-error", style: { display: "none" } });
+      const resultHost = h("div", {});
+      const runBtn = h("button", { class: "btn btn-primary bk-run", onClick: () => run() }, "Run check");
+
+      function refreshChips() {
+        chipRow.innerHTML = "";
+        a.scenarios.forEach((s) => chipRow.appendChild(h("button", {
+          class: "chip", "aria-pressed": s.id === selected.id ? "true" : "false",
+          onClick: () => {
+            if (running) return;
+            selected = s;
+            intentLine.textContent = s.intent;
+            errLine.style.display = "none";
+            resultHost.innerHTML = "";
+            refreshChips();
+          },
+        }, s.label)));
+      }
+      refreshChips();
+
+      async function run() {
+        if (running) return;
+        running = true;
+        runBtn.disabled = true;
+        errLine.style.display = "none";
+        resultHost.innerHTML = "";
+        try {
+          const d = await api.fetchJson(a.endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(selected.body),
+          });
+          resultHost.appendChild(renderResult(d, a.labels));
+          refreshEscalationBadge();
+        } catch (e) {
+          errLine.textContent = e && e.message ? e.message : "Cannot reach the gateway.";
+          errLine.style.display = "";
+        } finally {
+          running = false;
+          runBtn.disabled = false;
+        }
+      }
+
+      view.appendChild(h("div", { class: "card" },
+        h("div", { class: "card-body" },
+          h("h3", { class: "bk-action-title" }, a.title),
+          h("p", { class: "view-sub" }, a.sub),
+          h("div", { class: "bk-control-label" }, "The agent wants to"),
+          chipRow, intentLine, runBtn, errLine, resultHost,
+        ),
+      ));
+    });
+
+    view.appendChild(h("p", { class: "bk-foot" },
+      "Each action runs live against the gateway on its own pack and writes a real audit row. The bank is a mock of the Open Bank Project v5.1.0 API: the screening result, card status and export policy live in the record, not in the request the agent submits."));
+  };
+
   /* =================================================================
    * 9. BOOTSTRAP
    * ================================================================= */
+
+  /* ---- Workspace switcher (company toggle in the topbar) -------- */
+
+  function routeWorkspace(route) {
+    if (route === "banking" || route === "actions") return "banking";
+    if (route === "integrations") return "twenty";
+    return null;  // live/escalations/audit/packs/settings are shared; keep the current workspace
+  }
+  function setWorkspaceState(id) {
+    state.workspace = id;
+    try { localStorage.setItem("coco.workspace", id); } catch (_) {}
+    const nameEl = $("#workspace-name");
+    if (nameEl) nameEl.textContent = currentWorkspace().label;
+    applyWorkspaceNav();
+    updateBadge();
+  }
+  function syncWorkspaceToRoute(route) {
+    const target = routeWorkspace(route);
+    if (target && target !== state.workspace) setWorkspaceState(target);
+  }
+  function setWorkspace(id) {
+    if (!WORKSPACES.some((w) => w.id === id)) return;
+    setWorkspaceState(id);
+    const target = "#/" + currentWorkspace().home;
+    if (location.hash === target) dispatch();
+    else location.hash = target;
+  }
+  function applyWorkspaceNav() {
+    const wsId = state.workspace;
+    $$(".nav-item[data-ws]").forEach((el) => {
+      const ok = (el.dataset.ws || "").split(/\s+/).includes(wsId);
+      el.style.display = ok ? "" : "none";
+    });
+    $$(".nav-section").forEach((sec) => {
+      const items = $$(".nav-item", sec);
+      const anyVisible = items.some((el) => el.style.display !== "none");
+      sec.style.display = items.length && !anyVisible ? "none" : "";
+    });
+  }
+  function buildWorkspaceMenu() {
+    const btn = $("#workspace-btn");
+    if (!btn) return;
+    const menu = h("div", { id: "workspace-menu", class: "ws-menu" });
+    menu.hidden = true;
+    document.body.appendChild(menu);
+    const close = () => { menu.hidden = true; };
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (!menu.hidden) { close(); return; }
+      menu.innerHTML = "";
+      WORKSPACES.forEach((w) => {
+        menu.appendChild(h("button", {
+          class: "ws-menu-item", "aria-current": w.id === state.workspace ? "true" : "false",
+          onClick: (ev) => { ev.stopPropagation(); close(); setWorkspace(w.id); },
+        },
+          h("span", { class: "ws-dot", dataset: { ws: w.id } }),
+          h("span", {}, w.label),
+        ));
+      });
+      const r = btn.getBoundingClientRect();
+      menu.style.top = (r.bottom + 6) + "px";
+      menu.style.left = r.left + "px";
+      menu.hidden = false;
+    });
+    document.addEventListener("click", close);
+  }
 
   function updateClock() {
     const c = $("#foot-clock");
@@ -1655,8 +1867,9 @@
   function updateBadge() {
     const b = $("#badge-escalations");
     if (!b) return;
-    b.textContent = String(state.escalations.length || 0);
-    b.dataset.empty = state.escalations.length === 0 ? "true" : "false";
+    const n = (state.escalations || []).filter((e) => inWorkspace(e.pack_id)).length;
+    b.textContent = String(n);
+    b.dataset.empty = n === 0 ? "true" : "false";
   }
 
   async function pollLive() {
@@ -1732,6 +1945,10 @@
     drawer.init();
     palette.init();
     mountGlyphs();
+    buildWorkspaceMenu();
+    const wsName = $("#workspace-name");
+    if (wsName) wsName.textContent = currentWorkspace().label;
+    applyWorkspaceNav();
     bindGlobalKeys();
     updateClock();
     setInterval(updateClock, 30 * 1000);
@@ -1747,7 +1964,7 @@
       refreshEscalationBadge(),
     ]);
 
-    if (!location.hash) location.hash = "#/live";
+    if (!location.hash) location.hash = "#/" + currentWorkspace().home;
     await dispatch();
 
     setInterval(refreshHealth, 15 * 1000);

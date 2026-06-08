@@ -1267,6 +1267,44 @@ table.t tbody tr[aria-selected="true"] { background: var(--accent-soft); }
 .bk-verdict-banner[data-v="ESCALATE"] { border-color: var(--escalate-line); background: var(--escalate-soft); }
 .bk-reason { font-size: var(--fs-14); color: var(--ink-1); }
 .bk-audit { margin: 0; font-family: var(--font-mono); font-size: var(--fs-12); color: var(--ink-3); }
+a.bk-audit { text-decoration: none; }
+a.bk-audit:hover { color: var(--accent); text-decoration: underline; }
+.bk-action-title { margin: 0 0 2px; font-size: var(--fs-16); font-weight: 600; color: var(--ink-0); }
+.bk-action-result { margin-top: var(--s-4); display: grid; gap: var(--s-3); }
 .bk-foot { margin-top: var(--s-6); padding-top: var(--s-4); border-top: 1px solid var(--line); font-size: var(--fs-13); color: var(--ink-4); line-height: var(--lh-normal); }
 
 @media (max-width: 640px) { .bk-panel-grid { grid-template-columns: 1fr; } }
+
+/* ---- Workspace switcher menu ------------------------------------- */
+
+.ws-menu {
+  position: fixed;
+  z-index: 60;
+  min-width: 200px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  box-shadow: var(--sh-3);
+  padding: 4px;
+}
+.ws-menu[hidden] { display: none; }
+.ws-menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  background: transparent;
+  border-radius: var(--r-sm);
+  font-family: var(--font-ui);
+  font-size: var(--fs-13);
+  color: var(--ink-1);
+  text-align: left;
+  cursor: pointer;
+}
+.ws-menu-item:hover { background: var(--surface-3); }
+.ws-menu-item[aria-current="true"] { color: var(--accent-ink); font-weight: 600; }
+.ws-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ink-4); flex: none; }
+.ws-dot[data-ws="twenty"] { background: var(--ink-2); }
+.ws-dot[data-ws="banking"] { background: var(--accent); }
