@@ -88,7 +88,7 @@ python -m http.server 8000
 ```
 
 Set the gateway URL (default `http://localhost:8080`), pick a pack, edit
-the JSON state, click Validate. The verdict renders below with a colored
+the JSON state, click Validate. The verdict renders below with a coloured
 badge.
 
 ## Integration points

@@ -17,6 +17,13 @@ COPY backend /app/backend
 COPY agents /app/agents
 COPY frontend /app/frontend
 
+# Packs, scenarios, fixtures, and the banking demo data. Shipping data/
+# makes the image self-contained: with COCO_PACK_DIR unset, config loads
+# both data/twenty/packs and data/banking/packs (6 packs). browser-extension
+# backs the /browser-extension.zip route.
+COPY data /app/data
+COPY browser-extension /app/browser-extension
+
 # Make backend/ the default working dir so uvicorn picks up `main:app`
 # with the same relative imports as in dev.
 WORKDIR /app/backend

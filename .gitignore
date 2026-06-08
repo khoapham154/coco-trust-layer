@@ -55,3 +55,6 @@ logs/
 
 # Private documents — internal-only specs, never published
 private_documents/
+
+# Local agent/session config
+.claude/

@@ -1,46 +1,34 @@
 # Coco Trust Layer
 
-Runtime governance for AI agents acting on enterprise SaaS. The agent
-asks before it acts. Coco checks the request against a YAML policy,
-returns **ALLOW**, **BLOCK** or **ESCALATE**, and writes the verdict to
-an audit log.
+Runtime governance for AI agents acting on enterprise SaaS. The agent asks before it acts. Coco checks the request against a YAML policy, returns **ALLOW**, **BLOCK** or **ESCALATE**, and writes the verdict to an audit log.
 
 ![license](https://img.shields.io/badge/license-MIT-1d4ed8)
-![tests](https://img.shields.io/badge/tests-45%2F45-047857)
-![packs](https://img.shields.io/badge/packs-5-047857)
+![tests](https://img.shields.io/badge/tests-51%2F51-047857)
+![packs](https://img.shields.io/badge/packs-9-047857)
 
 ![Live dashboard](docs/images/dashboard_live.png)
+
+One gateway serves two workspaces in the dashboard: a Twenty CRM governance demo and an agent-banking trust pipeline. The toggle top-left switches between them.
 
 ## What it does
 
 Three building blocks:
 
-1. **Action Packs.** Plain YAML files that describe what an action must
-   look like to be valid. RevOps writes them, not engineering.
-2. **Gateway.** A FastAPI service. Receives the agent's intent, reads
-   live state from the SaaS, evaluates the pack, returns a verdict.
-3. **Audit ledger.** SQLite. Every verdict, every reason, every
-   policy version that fired.
+1. **Action Packs.** Plain YAML that describes what an action must look like to be valid. The team that owns the rules writes them, not engineering.
+2. **Gateway.** A FastAPI service. It takes the agent's intent, reads live state from the system of record, evaluates the pack, and returns a verdict.
+3. **Audit ledger.** SQLite. Every verdict, every reason, every policy version that fired.
 
-Three verdicts:
-
-| Verdict    | Effect                                           |
-|------------|--------------------------------------------------|
-| `ALLOW`    | Action proceeds. Mutation lands. Row written.    |
-| `BLOCK`    | Action skipped. Reason logged.                   |
-| `ESCALATE` | Action paused. Human reviews it in the dashboard.|
+| Verdict | Effect |
+|---|---|
+| `ALLOW` | Action proceeds. Mutation lands. Row written. |
+| `BLOCK` | Action stopped. Reason logged. |
+| `ESCALATE` | Action paused. A human reviews it in the dashboard. |
 
 ## Why
 
-Modern copilots write to CRMs, EHRs and finance tools at a pace human
-RBAC was never designed for. Vendor permissions cover users, not agents
-that do twenty things a minute. When an agent does the wrong thing, the
-blast radius is large and the trail is thin.
+Copilots now write to CRMs, banks and finance tools faster than human RBAC was built for. Vendor permissions cover users, not agents that take twenty actions a minute. When an agent does the wrong thing, the blast radius is large and the trail is thin.
 
-Hard-coded guards do not scale. Each tenant has different stages,
-different retention rules, different review thresholds. The people who
-know the rules cannot edit Python. YAML packs let them write the policy
-and Coco enforces it.
+Hard-coded guards do not scale. Each tenant has different stages, limits and review thresholds, and the people who know the rules cannot edit Python. YAML packs let them write the policy; Coco enforces it and logs every call.
 
 ## Quickstart
 
@@ -58,103 +46,71 @@ tmux send-keys -t coco_gateway \
      --app-dir backend --host 0.0.0.0 --port 8080' Enter
 
 curl -s localhost:8080/health
-# {"status":"ok","packs_loaded":5}
+# {"status":"ok","packs_loaded":9}
 
 open http://localhost:8080/dashboard
 ```
 
-No Twenty needed for the dashboard. Open the built-in sandbox at
-`http://localhost:8080/sandbox/twenty` to try the user-facing overlay.
+The dashboard needs no external service. Open `/sandbox/twenty` to try the user-facing overlay.
 
-## What you see
+## The dashboard
 
-### Live
+The toggle top-left switches workspace. Each shows only its own packs, verdicts and escalations.
 
-Verdicts stream in from the gateway. Tiles for throughput, block rate,
-p95 latency, escalations pending. Click any row to see the full
-decision JSON and the YAML rule that fired.
-
-![Live](docs/images/dashboard_live.png)
-
-### Action Packs
-
-The five Twenty packs as editable YAML. Edit, save, and the gateway
-hot-reloads the engine. Previous versions snapshot to disk so you can
-revert.
-
-![Packs](docs/images/dashboard_packs.png)
-
-### Escalations
-
-Verdicts that need a human. Approve to retry the action, deny to keep
-the block. Both decisions write follow-up audit rows.
+- **Live.** Verdicts stream in. Tiles for throughput, block rate, p95 latency and escalations pending. Click a row for the full decision and the YAML rule that fired.
+- **Action Packs.** Edit a pack as YAML, save, and the gateway hot-reloads. Prior versions snapshot to disk for revert.
+- **Escalations.** Verdicts that need a human. Approve to retry, deny to keep the block. Both write follow-up rows.
+- **Audit Ledger.** Filter by pack, verdict, date and reason. Export to CSV with each decision's JSON.
 
 ![Escalations](docs/images/dashboard_escalations.png)
 
-### Audit Ledger
-
-Full table. Filter by pack, verdict, date and reason text. Export to
-CSV with every decision's JSON.
-
-![Audit](docs/images/dashboard_audit.png)
-
-### Twenty overlay (user-facing)
-
-Inside Twenty, a small badge sits in the corner. When an agent (or a
-user) attempts a blocked action, Coco interrupts with a modal that
-names the policy, the failing rule and the plain-English reason. The
-"See policy" button opens the YAML with the firing rule highlighted.
+Inside Twenty, a Shadow-DOM overlay shows a corner badge and, on a blocked action, a modal that names the policy, the failing rule and the reason.
 
 ![Sandbox block](docs/images/sandbox_block_modal.png)
-![Policy drawer](docs/images/sandbox_policy_drawer.png)
 
-The overlay runs inside a Shadow DOM so Twenty's CSS cannot break it.
-To try it without setting up Twenty, open the built-in sandbox at
-`/sandbox/twenty`.
+## Connect a real Twenty
 
-## End to end with real Twenty
+The dashboard works standalone. To drive a live Twenty instance you need Docker. Run `bash scripts/setup_twenty.sh`, create an API key in Settings → Developers, seed it with `python scripts/seed_twenty.py`, then paste the key into Integrations. Full steps in [docs/twenty_integration.md](docs/twenty_integration.md) and [docs/demo_walkthrough.md](docs/demo_walkthrough.md).
 
-You need Docker. About 2 GB of disk for the Postgres + images.
+## Agent-banking demo
 
-```bash
-bash scripts/setup_twenty.sh        # ~5 min first run
-# open http://localhost:3000, create account, Settings → Developers → API key
-export TWENTY_API_KEY=eyJ...
-python scripts/seed_twenty.py       # 5 companies, 10 people, 3 deals
-```
+An AI agent moves money through the six layers of the agent-banking trust stack. Coco is stage four: it reads the live account state and rules before the transfer executes.
 
-Back in the dashboard, go to Integrations, paste the API key, test the
-connection. Drag the bookmarklet to your bookmarks bar. Click it on a
-Twenty tab. The Coco badge appears.
+The hero case is a $2M wire that every API layer accepts. A sanctions hold sits in the account state the payment API never exposes, so Coco reads that state, blocks the transfer before it reaches SWIFT, and logs why. Stage four runs live on the real engine; the other five layers are illustrative. The bank is a mock of the Open Bank Project v5.1.0 API.
 
-For the full sequence, see [docs/demo_walkthrough.md](docs/demo_walkthrough.md).
+The Agent actions view governs the rest of what an agent does to a bank on the same engine: adding a payee, changing a card limit, exporting customer records. The narration is in [docs/banking_demo_script.md](docs/banking_demo_script.md); the design is in [docs/architecture.md](docs/architecture.md).
 
 ## Action Packs
 
-| Pack                        | Action               | Governs                              |
-|-----------------------------|----------------------|--------------------------------------|
-| `twenty.deal_stage_move`    | `move_stage`         | Pipeline transitions, high-value review |
-| `twenty.contact_delete`     | `delete_contact`     | Contact lifecycle, role enforcement |
-| `twenty.opportunity_create` | `create_opportunity` | Deal creation, data integrity |
-| `twenty.bulk_email`         | `send_bulk_email`    | Outreach limits, do-not-contact     |
-| `twenty.field_update`       | `update_field`       | Required fields, archived records   |
+Twenty CRM:
 
-Packs live in `data/twenty/packs/`. Each is ~30 lines of YAML. The DSL
-is an AST-safe subset of Python: comparisons, booleans, dotted reads.
-No calls, no dunders, no imports. See
-[`backend/engine/dsl.py`](backend/engine/dsl.py).
+| Pack | Action | Governs |
+|---|---|---|
+| `twenty.deal_stage_move` | `move_stage` | Pipeline transitions, high-value review |
+| `twenty.contact_delete` | `delete_contact` | Contact lifecycle, role enforcement |
+| `twenty.opportunity_create` | `create_opportunity` | Deal creation, data integrity |
+| `twenty.bulk_email` | `send_bulk_email` | Outreach limits, do-not-contact |
+| `twenty.field_update` | `update_field` | Required fields, archived records |
+
+Agent Bank:
+
+| Pack | Action | Governs |
+|---|---|---|
+| `banking.wire_transfer` | `initiate_transfer` | Sanctions hold, approved payee, auto-approve limit |
+| `banking.add_beneficiary` | `add_beneficiary` | Payee screening, jurisdiction, first-time review |
+| `banking.card_controls` | `update_card_limit` | Frozen or lost cards, limit ceiling |
+| `banking.data_export` | `export_customer_records` | Export purpose, bulk and cross-border review |
+
+Packs live in `data/twenty/packs/` and `data/banking/packs/`. Each is about 30 lines of YAML. The DSL is an AST-safe subset of Python: comparisons, booleans and dotted reads, with no calls, dunders or imports. See [`backend/engine/dsl.py`](backend/engine/dsl.py).
 
 ## Testing
 
 ```bash
-PYTHONPATH=$PWD pytest tests/ -v                        # 45 unit tests
+PYTHONPATH=$PWD pytest tests/ -v                        # 51 unit tests
 PYTHONPATH=$PWD python tests/run_twenty_scenarios.py    # 19/19 regression
+bash scripts/banking_smoke.sh                           # banking backend, every verdict
 bash scripts/journeys_smoke.sh                          # 6 product journeys
 ```
-
-`journeys_smoke.sh` walks the six product journeys (install,
-Live + metrics, escalations, policy edit, validate, audit + CSV) against
-a running gateway. Useful as a deploy gate.
 
 ## Repo
 
@@ -162,23 +118,23 @@ a running gateway. Useful as a deploy gate.
 coco-trust-layer/
 ├── backend/
 │   ├── engine/             pydantic models, AST-safe DSL
-│   ├── routes/             validate, packs, packs_yaml, audit, audit_advanced,
-│   │                       scenarios, metrics, escalations, twenty_ops, demo, dashboard
-│   ├── providers/twenty.py live Twenty REST → ui_state projection
+│   ├── routes/             validate, packs, packs_yaml, audit, audit_advanced, scenarios,
+│   │                       metrics, escalations, twenty_ops, demo, demo_bank, mock_obp, dashboard
+│   ├── providers/          twenty.py (CRM state) + bank.py (OBP state)
 │   ├── dashboard/          templates/index.html + static/{app.js, styles.css, tokens.css}
 │   └── db/audit_log.py     SQLite ledger + escalation_status
 ├── agents/                 Python agent (Twenty REST via the gateway)
 ├── frontend/               coco-sdk.js + inject.js (Shadow-DOM overlay)
-├── browser-extension/      Chromium MV3 (MAIN-world content scripts)
-├── data/twenty/
-│   ├── packs/              5 YAML packs + auto-snapshotted _versions/
-│   └── scenarios/          19 JSON scenario fixtures
+├── browser-extension/      Chromium MV3 content scripts
+├── data/
+│   ├── twenty/packs/       5 CRM packs + auto-snapshotted _versions/
+│   ├── twenty/scenarios/   19 JSON scenario fixtures
+│   └── banking/            4 banking packs + OBP fixtures (accounts, resources)
 ├── tests/                  pytest + scenario regression
-├── scripts/                setup_twenty.sh, seed_twenty.py,
-│                           journeys_smoke.sh, snapshot.py, test_overlay.py
-├── deploy/                 docker-compose for local dev
+├── scripts/                setup_twenty.sh, seed_twenty.py, seed_banking.py,
+│                           banking_smoke.sh, journeys_smoke.sh, snapshot.py
 ├── docs/                   architecture, how_to_run, twenty_integration,
-│                           demo_walkthrough, images/
+│                           demo_walkthrough, banking_demo_script, images/
 └── README.md
 ```
 

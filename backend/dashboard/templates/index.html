@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/styles.css?v=3" />
+  <link rel="stylesheet" href="/static/styles.css?v=7" />
   <link rel="icon" type="image/svg+xml" href="/static/assets/coco-logo.svg" />
 </head>
 <body>
@@ -19,11 +19,19 @@
 
       <div class="nav-section">
         <div class="nav-section-label">Operate</div>
-        <a class="nav-item" data-route="live" href="#/live">
+        <a class="nav-item" data-route="banking" data-ws="banking" href="#/banking">
+          <span class="nav-glyph" data-glyph="bank"></span>
+          <span>Agent Banking</span>
+        </a>
+        <a class="nav-item" data-route="actions" data-ws="banking" href="#/actions">
+          <span class="nav-glyph" data-glyph="play"></span>
+          <span>Agent actions</span>
+        </a>
+        <a class="nav-item" data-route="live" data-ws="twenty banking" href="#/live">
           <span class="nav-glyph" data-glyph="activity"></span>
           <span>Live</span>
         </a>
-        <a class="nav-item" data-route="escalations" href="#/escalations">
+        <a class="nav-item" data-route="escalations" data-ws="twenty banking" href="#/escalations">
           <span class="nav-glyph" data-glyph="bell"></span>
           <span>Escalations</span>
           <span class="nav-badge" id="badge-escalations" data-empty="true">0</span>
@@ -32,11 +40,11 @@
 
       <div class="nav-section">
         <div class="nav-section-label">Govern</div>
-        <a class="nav-item" data-route="packs" href="#/packs">
+        <a class="nav-item" data-route="packs" data-ws="twenty banking" href="#/packs">
           <span class="nav-glyph" data-glyph="file"></span>
           <span>Action Packs</span>
         </a>
-        <a class="nav-item" data-route="audit" href="#/audit">
+        <a class="nav-item" data-route="audit" data-ws="twenty banking" href="#/audit">
           <span class="nav-glyph" data-glyph="layers"></span>
           <span>Audit Ledger</span>
         </a>
@@ -44,11 +52,11 @@
 
       <div class="nav-section">
         <div class="nav-section-label">Connect</div>
-        <a class="nav-item" data-route="integrations" href="#/integrations">
+        <a class="nav-item" data-route="integrations" data-ws="twenty" href="#/integrations">
           <span class="nav-glyph" data-glyph="plug"></span>
           <span>Integrations</span>
         </a>
-        <a class="nav-item" data-route="settings" href="#/settings">
+        <a class="nav-item" data-route="settings" data-ws="twenty banking" href="#/settings">
           <span class="nav-glyph" data-glyph="cog"></span>
           <span>Settings</span>
         </a>
@@ -63,7 +71,7 @@
     <header class="topbar">
       <div class="topbar-left">
         <button class="workspace" id="workspace-btn" type="button" aria-label="Switch workspace">
-          <span>Twenty CRM</span>
+          <span id="workspace-name">Twenty CRM</span>
           <span class="workspace-chev">▾</span>
         </button>
       </div>
@@ -107,6 +115,6 @@
   <!-- Toast stack -->
   <div class="toast-stack" id="toast-stack" aria-live="polite"></div>
 
-  <script src="/static/app.js?v=3" defer></script>
+  <script src="/static/app.js?v=7" defer></script>
 </body>
 </html>

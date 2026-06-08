@@ -1,0 +1,27 @@
+# Render Blueprint: the Coco Trust Layer gateway (dashboard + Agent
+# Banking demo) as one Docker web service on the free plan. Same-origin,
+# so it serves the dashboard, the banking API, and mock OBP from one host.
+#
+# Setup: Render dashboard -> New -> Blueprint -> pick this repo + the
+# banking-demo branch. Free plan sleeps after 15 min idle (first hit after
+# idle is slow) and the audit DB resets on restart; both are fine for a demo.
+services:
+  - type: web
+    name: coco-trust-layer
+    runtime: docker
+    repo: https://github.com/khoapham154/coco-trust-layer
+    branch: banking-demo
+    dockerfilePath: backend/Dockerfile
+    dockerContext: .
+    plan: free
+    healthCheckPath: /health
+    # Bind uvicorn to Render's injected $PORT. The bank provider reads $PORT
+    # for its localhost self-call (see backend/providers/bank.py), and
+    # COCO_PACK_DIR stays unset so both the Twenty and banking pack
+    # directories load (6 packs).
+    dockerCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: COCO_DB_PATH
+        value: /tmp/audit.db
+      - key: PYTHONUNBUFFERED
+        value: "1"

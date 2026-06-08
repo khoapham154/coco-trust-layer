@@ -25,15 +25,16 @@ def test_dashboard_html_renders(client):
     assert r.status_code == 200
     assert "text/html" in r.headers["content-type"]
     body = r.text
-    assert "Coco Trust Layer" in body
+    assert "Trust Layer" in body
     assert "/static/app.js" in body
     assert "/static/styles.css" in body
 
 
 def test_static_assets_served(client):
     for asset, needle in [
-        ("/static/styles.css", "--accent: #9024e2"),
-        ("/static/app.js", "loadPacks"),
+        ("/static/styles.css", ".topbar"),
+        ("/static/tokens.css", "#7c3aed"),
+        ("/static/app.js", "dispatch"),
     ]:
         r = client.get(asset)
         assert r.status_code == 200, f"{asset} failed: {r.status_code}"

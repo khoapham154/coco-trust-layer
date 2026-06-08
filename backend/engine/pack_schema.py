@@ -98,6 +98,19 @@ class AgentActionPack(BaseModel):
             out[pack.id] = pack
         return out
 
+    @classmethod
+    def load_all_dirs(cls, pack_dirs) -> Dict[str, "AgentActionPack"]:
+        """Load and merge packs from several directories. Ids stay unique."""
+        out: Dict[str, AgentActionPack] = {}
+        for pack_dir in pack_dirs:
+            if not Path(pack_dir).exists():
+                continue
+            for pid, pack in cls.load_all(pack_dir).items():
+                if pid in out:
+                    raise ValueError(f"Duplicate pack id across dirs: {pid}")
+                out[pid] = pack
+        return out
+
     def check_count(self) -> int:
         return (
             len(self.pre_conditions)

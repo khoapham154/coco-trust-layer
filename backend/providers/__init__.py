@@ -9,6 +9,7 @@ scalars (``has_flagged_recipient``, ``recipient_count``, …) which the
 pack can then compare directly.
 """
 
+from providers.bank import BankStateProvider
 from providers.twenty import TwentyStateProvider
 
-__all__ = ["TwentyStateProvider"]
+__all__ = ["BankStateProvider", "TwentyStateProvider"]

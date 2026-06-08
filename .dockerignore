@@ -1,0 +1,41 @@
+# Keep the image small and clean. Build context is the repo root
+# (see backend/Dockerfile and render.yaml).
+
+# Runtime SQLite must NOT be baked into the image — it is written at a
+# runtime path (/tmp on Render free, a volume on a paid plan).
+data/runtime/
+*.db
+*.db-wal
+*.db-shm
+
+# Historical pack versions are not loaded at runtime.
+data/twenty/packs/_versions/
+
+# Seeded Twenty fixture is regenerated, never shipped.
+data/twenty/fixtures/seeded.json
+
+# Vendored Twenty CRM clone (huge, unrelated to the gateway).
+twenty/
+
+# Internal-only specs and local agent/session config.
+private_documents/
+.claude/
+
+# Python / tooling noise.
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+.venv/
+env/
+
+# Logs, editor, OS cruft.
+logs/
+.vscode/
+.idea/
+.git/
+.DS_Store
+Thumbs.db
+*.swp
+*.tmp
+*.bak

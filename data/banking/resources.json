@@ -1,0 +1,112 @@
+{
+  "bank_id": "coco-demo-bank",
+  "counterparties": {
+    "brightwave-au": {
+      "counterparty": {
+        "counterparty_id": "brightwave-au",
+        "name": "Brightwave Studios Pty Ltd",
+        "bank_id": "coco-demo-bank",
+        "other_account_routing": { "scheme": "IBAN", "address": "AU12 3456 7890 1234 5678 90" },
+        "jurisdiction": "AU"
+      },
+      "counterparty_attributes": [
+        { "name": "screening_cleared", "type": "STRING", "value": "true" },
+        { "name": "jurisdiction_sanctioned", "type": "STRING", "value": "false" },
+        { "name": "first_time_in_monitored_region", "type": "STRING", "value": "false" }
+      ]
+    },
+    "sterling-offshore": {
+      "counterparty": {
+        "counterparty_id": "sterling-offshore",
+        "name": "Sterling Offshore Holdings",
+        "bank_id": "coco-demo-bank",
+        "other_account_routing": { "scheme": "IBAN", "address": "KP55 0000 1111 2222 3333 44" },
+        "jurisdiction": "KP"
+      },
+      "counterparty_attributes": [
+        { "name": "screening_cleared", "type": "STRING", "value": "true" },
+        { "name": "jurisdiction_sanctioned", "type": "STRING", "value": "true" },
+        { "name": "first_time_in_monitored_region", "type": "STRING", "value": "true" }
+      ]
+    },
+    "kepler-fze": {
+      "counterparty": {
+        "counterparty_id": "kepler-fze",
+        "name": "Kepler Trading FZE",
+        "bank_id": "coco-demo-bank",
+        "other_account_routing": { "scheme": "IBAN", "address": "AE07 0331 2345 6789 0123 456" },
+        "jurisdiction": "AE"
+      },
+      "counterparty_attributes": [
+        { "name": "screening_cleared", "type": "STRING", "value": "true" },
+        { "name": "jurisdiction_sanctioned", "type": "STRING", "value": "false" },
+        { "name": "first_time_in_monitored_region", "type": "STRING", "value": "true" }
+      ]
+    }
+  },
+  "cards": {
+    "card-ops-01": {
+      "card": {
+        "card_id": "card-ops-01",
+        "label": "Operations Visa",
+        "primary_account_number_masked": "•••• 4417",
+        "status": "active",
+        "account_id": "operating-au-001"
+      },
+      "card_attributes": [
+        { "name": "reported_lost", "type": "STRING", "value": "false" },
+        { "name": "current_limit", "type": "DOUBLE", "value": "15000" }
+      ]
+    },
+    "card-travel-09": {
+      "card": {
+        "card_id": "card-travel-09",
+        "label": "Travel Mastercard",
+        "primary_account_number_masked": "•••• 8820",
+        "status": "active",
+        "account_id": "operating-au-001"
+      },
+      "card_attributes": [
+        { "name": "reported_lost", "type": "STRING", "value": "true" },
+        { "name": "current_limit", "type": "DOUBLE", "value": "8000" }
+      ]
+    },
+    "card-exec-02": {
+      "card": {
+        "card_id": "card-exec-02",
+        "label": "Executive Visa",
+        "primary_account_number_masked": "•••• 1190",
+        "status": "active",
+        "account_id": "treasury-002"
+      },
+      "card_attributes": [
+        { "name": "reported_lost", "type": "STRING", "value": "false" },
+        { "name": "current_limit", "type": "DOUBLE", "value": "50000" }
+      ]
+    }
+  },
+  "datasets": {
+    "crm-contacts": {
+      "dataset": {
+        "dataset_id": "crm-contacts",
+        "label": "CRM contacts",
+        "bank_id": "coco-demo-bank",
+        "record_total": 48210
+      },
+      "dataset_attributes": [
+        { "name": "exports_enabled", "type": "STRING", "value": "true" }
+      ]
+    },
+    "kyc-vault": {
+      "dataset": {
+        "dataset_id": "kyc-vault",
+        "label": "KYC document vault",
+        "bank_id": "coco-demo-bank",
+        "record_total": 12940
+      },
+      "dataset_attributes": [
+        { "name": "exports_enabled", "type": "STRING", "value": "false" }
+      ]
+    }
+  }
+}

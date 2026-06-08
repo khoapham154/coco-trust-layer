@@ -1,0 +1,26 @@
+id: banking.card_controls
+action: update_card_limit
+description: >
+  Governs an agent changing a corporate card's spending limit. A frozen card
+  cannot be changed at all, a card reported lost or stolen is blocked, and a
+  limit increase above the programme ceiling is held for a manager. The card
+  status and the lost flag live in the card record, not in the change the
+  agent submits.
+
+pre_conditions:
+  - id: card_active
+    type: equals
+    path: card.status
+    value: active
+    on_fail: BLOCK
+    reason: Card is frozen or not active
+
+constraints:
+  - id: card_not_reported
+    rule: card.reported_lost == false
+    on_fail: BLOCK
+    reason: Card is reported lost or stolen
+  - id: limit_within_ceiling
+    rule: request.requested_limit <= 50000
+    on_fail: ESCALATE
+    reason: Card limit increases above 50000 require a manager approval
