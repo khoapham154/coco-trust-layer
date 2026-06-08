@@ -8,7 +8,7 @@ Runtime governance for AI agents acting on enterprise SaaS. The agent asks befor
 
 ![Live dashboard](docs/images/dashboard_live.png)
 
-One gateway serves two workspaces in the dashboard: a Twenty CRM governance demo and an agent-banking trust pipeline. The toggle top-left switches between them.
+One gateway serves two workspaces: Twenty CRM governance and agent banking. The toggle top-left switches between them.
 
 ## What it does
 
@@ -70,15 +70,30 @@ Inside Twenty, a Shadow-DOM overlay shows a corner badge and, on a blocked actio
 
 ## Connect a real Twenty
 
-The dashboard works standalone. To drive a live Twenty instance you need Docker. Run `bash scripts/setup_twenty.sh`, create an API key in Settings → Developers, seed it with `python scripts/seed_twenty.py`, then paste the key into Integrations. Full steps in [docs/twenty_integration.md](docs/twenty_integration.md) and [docs/demo_walkthrough.md](docs/demo_walkthrough.md).
+The dashboard works standalone. To drive a live Twenty instance you need Docker. Run `bash scripts/setup_twenty.sh`, create an API key in Settings → Developers, seed it with `python scripts/seed_twenty.py`, then paste the key into Integrations. Full steps in [docs/twenty_integration.md](docs/twenty_integration.md) and [the walkthrough](docs/demo_walkthrough.md).
 
-## Agent-banking demo
+## Agent banking
 
-An AI agent moves money through the six layers of the agent-banking trust stack. Coco is stage four: it reads the live account state and rules before the transfer executes.
+Coco governs an AI agent that operates a bank account. It reads the live account state at the moment of each action and returns ALLOW, BLOCK or ESCALATE before the action commits. The interface is the Open Bank Project v5.1.0 API, the open standard banks expose.
 
-The hero case is a $2M wire that every API layer accepts. A sanctions hold sits in the account state the payment API never exposes, so Coco reads that state, blocks the transfer before it reaches SWIFT, and logs why. Stage four runs live on the real engine; the other five layers are illustrative. The bank is a mock of the Open Bank Project v5.1.0 API.
+A wire passes through the layers of the agent-banking trust stack: discovery, identity, authorisation, runtime enforcement, detection, investigation. The other layers check who the agent is and what it may do. Coco checks what is actually true in the account, in the moment, before the money moves.
 
-The Agent actions view governs the rest of what an agent does to a bank on the same engine: adding a payee, changing a card limit, exporting customer records. The narration is in [docs/banking_demo_script.md](docs/banking_demo_script.md); the design is in [docs/architecture.md](docs/architecture.md).
+![Sanctions hold caught at runtime](docs/images/banking_block.png)
+
+An agent wires $2M and the payment API accepts it, because the request is well-formed and the account is funded. A sanctions hold sits in the account state the payment API never returns. Coco reads that state, fails the check, and blocks the transfer before it reaches SWIFT, with the rule and the reason in the audit row. A $250k transfer with no hold but above the auto-approve limit escalates to a human instead.
+
+Coco governs the rest of what the agent does to the bank on the same engine.
+
+![Agent actions governed by Coco](docs/images/banking_actions.png)
+
+| Case | The agent | Coco |
+|---|---|---|
+| Wire transfer | Sends $2M to a counterparty under a sanctions hold | **BLOCK** before SWIFT |
+| Add beneficiary | Adds a payee in a sanctioned jurisdiction | **BLOCK** before any payment |
+| Card limit | Raises a corporate card limit past the ceiling | **ESCALATE** to a manager |
+| Data export | Pulls customer records with no stated purpose | **BLOCK** the export |
+
+The walkthrough is in [the banking script](docs/banking_demo_script.md); the design is in [docs/architecture.md](docs/architecture.md).
 
 ## Action Packs
 
@@ -92,16 +107,7 @@ Twenty CRM:
 | `twenty.bulk_email` | `send_bulk_email` | Outreach limits, do-not-contact |
 | `twenty.field_update` | `update_field` | Required fields, archived records |
 
-Agent Bank:
-
-| Pack | Action | Governs |
-|---|---|---|
-| `banking.wire_transfer` | `initiate_transfer` | Sanctions hold, approved payee, auto-approve limit |
-| `banking.add_beneficiary` | `add_beneficiary` | Payee screening, jurisdiction, first-time review |
-| `banking.card_controls` | `update_card_limit` | Frozen or lost cards, limit ceiling |
-| `banking.data_export` | `export_customer_records` | Export purpose, bulk and cross-border review |
-
-Packs live in `data/twenty/packs/` and `data/banking/packs/`. Each is about 30 lines of YAML. The DSL is an AST-safe subset of Python: comparisons, booleans and dotted reads, with no calls, dunders or imports. See [`backend/engine/dsl.py`](backend/engine/dsl.py).
+The four banking packs (`banking.wire_transfer`, `banking.add_beneficiary`, `banking.card_controls`, `banking.data_export`) govern the cases above. Packs live in `data/twenty/packs/` and `data/banking/packs/`. Each is about 30 lines of YAML. The DSL is an AST-safe subset of Python: comparisons, booleans and dotted reads, with no calls, dunders or imports. See [`backend/engine/dsl.py`](backend/engine/dsl.py).
 
 ## Testing
 
