@@ -1,0 +1,35 @@
+{
+  "desk_id": "coco-demo-seclend",
+  "loans": {
+    "loan-001": {
+      "id": "loan-001",
+      "security_id": "AAPL",
+      "counterparty_id": "citadel-sec",
+      "loaned_value": 1925000,
+      "required_threshold_pct": 102,
+      "eligible_collateral": ["cash", "govt_bond", "equity"],
+      "recall_active": false,
+      "recall_deadline_days": 30
+    },
+    "loan-002": {
+      "id": "loan-002",
+      "security_id": "TSLA",
+      "counterparty_id": "jane-street",
+      "loaned_value": 2500000,
+      "required_threshold_pct": 105,
+      "eligible_collateral": ["cash", "govt_bond"],
+      "recall_active": true,
+      "recall_deadline_days": 1
+    },
+    "loan-003": {
+      "id": "loan-003",
+      "security_id": "GME",
+      "counterparty_id": "meridian-bd",
+      "loaned_value": 300000,
+      "required_threshold_pct": 102,
+      "eligible_collateral": ["cash", "govt_bond", "equity"],
+      "recall_active": false,
+      "recall_deadline_days": 3
+    }
+  }
+}

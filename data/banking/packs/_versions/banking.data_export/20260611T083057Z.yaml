@@ -21,9 +21,9 @@ constraints:
     on_fail: BLOCK
     reason: Export request has no declared business purpose
   - id: volume_within_limit
-    rule: request.record_count <= 15000
+    rule: request.record_count <= 5000
     on_fail: ESCALATE
-    reason: Bulk exports over 15000 records need a data-protection review
+    reason: Bulk exports over 5000 records need a data-protection review
   - id: domestic_only
     rule: request.cross_border == false
     on_fail: ESCALATE

@@ -3,6 +3,7 @@ from routes.audit_advanced import router as audit_advanced_router
 from routes.dashboard import router as dashboard_router
 from routes.demo import router as demo_router
 from routes.demo_bank import router as demo_bank_router
+from routes.demo_seclend import router as demo_seclend_router
 from routes.escalations import router as escalations_router
 from routes.metrics import router as metrics_router
 from routes.mock_obp import router as mock_obp_router
@@ -18,6 +19,7 @@ __all__ = [
     "dashboard_router",
     "demo_router",
     "demo_bank_router",
+    "demo_seclend_router",
     "escalations_router",
     "metrics_router",
     "mock_obp_router",

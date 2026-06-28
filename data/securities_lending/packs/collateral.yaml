@@ -1,0 +1,29 @@
+id: securities_lending.collateral
+action: post_collateral
+cdm_event: CollateralUpdate
+description: >
+  Margin governance for collateral posting and substitution. The action is
+  blocked when the posted collateral type is not eligible under the agreement,
+  or when the posted value falls below the required margin threshold for the
+  loaned security. A non-cash substitution that pushes the pool past its
+  concentration limit is held for a desk review. The eligible collateral set
+  and the required threshold live in the loan agreement, not in the agent's
+  posting request. Anchored to the CDM CollateralUpdate event.
+
+pre_conditions:
+  - id: collateral_eligible
+    type: equals
+    path: collateral.eligible
+    value: true
+    on_fail: BLOCK
+    reason: Posted collateral type is not eligible under the agreement
+
+constraints:
+  - id: meets_margin_threshold
+    rule: collateral.posted_value >= loan.required_value
+    on_fail: BLOCK
+    reason: Posted collateral is below the required margin threshold
+  - id: concentration_within_limit
+    rule: collateral.type == "cash" or collateral.concentration_pct <= 25
+    on_fail: ESCALATE
+    reason: Non-cash collateral concentration above the limit requires desk review

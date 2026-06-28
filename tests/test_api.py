@@ -36,14 +36,14 @@ def test_health_returns_ok(client):
     assert r.status_code == 200
     data = r.json()
     assert data["status"] == "ok"
-    assert data["packs_loaded"] == 9
+    assert data["packs_loaded"] == 14
 
 
-def test_list_packs_includes_twenty_and_banking(client):
+def test_list_packs_includes_all_verticals(client):
     r = client.get("/api/packs")
     assert r.status_code == 200
     data = r.json()
-    assert len(data) == 9
+    assert len(data) == 14
     ids = {p["id"] for p in data}
     assert "twenty.deal_stage_move" in ids
     assert "twenty.bulk_email" in ids
@@ -51,6 +51,11 @@ def test_list_packs_includes_twenty_and_banking(client):
     assert "banking.add_beneficiary" in ids
     assert "banking.card_controls" in ids
     assert "banking.data_export" in ids
+    assert "securities_lending.loan_execution" in ids
+    assert "securities_lending.collateral" in ids
+    assert "securities_lending.rate" in ids
+    assert "securities_lending.recall" in ids
+    assert "securities_lending.reporting" in ids
 
 
 def test_get_pack_detail(client):
@@ -207,7 +212,7 @@ def test_demo_data_export_block_no_purpose(client):
 def test_demo_data_export_escalate_bulk(client):
     r = client.post(
         "/api/demo/data_export",
-        json={"dataset_id": "crm-contacts", "purpose_declared": True, "record_count": 12000, "cross_border": False},
+        json={"dataset_id": "crm-contacts", "purpose_declared": True, "record_count": 20000, "cross_border": False},
     )
     assert r.status_code == 200
     assert r.json()["verdict"] == "ESCALATE"

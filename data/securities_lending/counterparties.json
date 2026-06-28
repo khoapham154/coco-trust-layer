@@ -1,0 +1,23 @@
+{
+  "desk_id": "coco-demo-seclend",
+  "counterparties": {
+    "citadel-sec": {
+      "id": "citadel-sec",
+      "name": "Citadel Securities LLC",
+      "exposure_cap": 50000000,
+      "current_exposure": 18000000
+    },
+    "jane-street": {
+      "id": "jane-street",
+      "name": "Jane Street Capital",
+      "exposure_cap": 10000000,
+      "current_exposure": 9200000
+    },
+    "meridian-bd": {
+      "id": "meridian-bd",
+      "name": "Meridian Broker Dealer",
+      "exposure_cap": 5000000,
+      "current_exposure": 1000000
+    }
+  }
+}

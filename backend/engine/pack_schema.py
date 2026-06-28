@@ -55,6 +55,11 @@ class AgentActionPack(BaseModel):
     id: str
     action: str
     description: str
+    # Optional anchor to the lifecycle event this contract guards. Securities
+    # lending packs set it to a FINOS Common Domain Model event name (e.g.
+    # "NewTrade", "CollateralUpdate") so a contract reads in the industry's own
+    # vocabulary. Verticals that have no such standard leave it null.
+    cdm_event: Optional[str] = None
     pre_conditions: List[PreCondition] = Field(default_factory=list)
     constraints: List[Constraint] = Field(default_factory=list)
     post_conditions: List[PostCondition] = Field(default_factory=list)

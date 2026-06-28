@@ -1308,3 +1308,16 @@ a.bk-audit:hover { color: var(--accent); text-decoration: underline; }
 .ws-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ink-4); flex: none; }
 .ws-dot[data-ws="twenty"] { background: var(--ink-2); }
 .ws-dot[data-ws="banking"] { background: var(--accent); }
+.ws-dot[data-ws="securities_lending"] { background: var(--ink-3); }
+
+/* ---- Securities Lending: Without/With Coco contrast ---- */
+.sl-contrast { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 18px; }
+@media (max-width: 720px) { .sl-contrast { grid-template-columns: 1fr; } }
+.sl-panel { border: 1px solid var(--line); border-radius: 12px; padding: 16px; background: var(--surface); }
+.sl-panel[data-tone="bad"]  { border-color: var(--block-line); background: var(--block-soft); }
+.sl-panel[data-tone="good"] { border-color: var(--allow-line); background: var(--allow-soft); }
+.sl-panel[data-tone="hold"] { border-color: var(--escalate-line); background: var(--escalate-soft); }
+.sl-panel-label { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-3); margin: 0 0 8px; }
+.sl-panel-body { font-size: 14px; line-height: 1.55; color: var(--ink-1); margin: 0; }
+.sl-panel-foot { display: inline-block; margin-top: 10px; font-size: 12px; color: var(--ink-3); }
+.sl-fallout { margin: 10px 0 0; font-size: 13px; line-height: 1.55; color: var(--block); }

@@ -10,6 +10,7 @@ pack can then compare directly.
 """
 
 from providers.bank import BankStateProvider
+from providers.seclend import SecLendStateProvider
 from providers.twenty import TwentyStateProvider
 
-__all__ = ["BankStateProvider", "TwentyStateProvider"]
+__all__ = ["BankStateProvider", "SecLendStateProvider", "TwentyStateProvider"]

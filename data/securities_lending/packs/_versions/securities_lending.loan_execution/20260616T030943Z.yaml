@@ -1,0 +1,38 @@
+id: securities_lending.loan_execution
+action: book_loan
+cdm_event: NewTrade
+description: >
+  Booking governance for an agent-initiated securities loan. The booking is
+  blocked when the security is not lendable, when available inventory does not
+  cover the requested quantity, when a recall or corporate action is live on
+  the security, or when the booking would push the borrower past its exposure
+  cap. A loan whose notional sits above the desk auto-approval limit is held
+  for a human. Inventory, the recall flag and the borrower's live exposure sit
+  in the desk blotter, not in the booking request, so an agent that trusts the
+  request alone never sees them. Anchored to the CDM NewTrade execution event.
+
+pre_conditions:
+  - id: security_loanable
+    type: equals
+    path: security.loanable
+    value: true
+    on_fail: BLOCK
+    reason: Security is not on the approved lendable list
+
+constraints:
+  - id: inventory_covers_quantity
+    rule: security.available_inventory >= request.quantity
+    on_fail: BLOCK
+    reason: Available inventory does not cover the requested quantity
+  - id: no_recall_or_corporate_action
+    rule: security.recall_active == false and security.corporate_action_active == false
+    on_fail: BLOCK
+    reason: A recall or corporate action is live on this security
+  - id: within_counterparty_cap
+    rule: request.exposure_after <= counterparty.exposure_cap
+    on_fail: BLOCK
+    reason: Booking would breach the counterparty exposure cap
+  - id: notional_within_desk_limit
+    rule: request.notional <= 50000
+    on_fail: ESCALATE
+    reason: Loan notional above the desk auto-approval limit requires sign-off

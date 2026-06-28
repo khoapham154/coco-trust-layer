@@ -4,11 +4,11 @@ Runtime governance for AI agents acting on enterprise SaaS. The agent asks befor
 
 ![license](https://img.shields.io/badge/license-MIT-1d4ed8)
 ![tests](https://img.shields.io/badge/tests-51%2F51-047857)
-![packs](https://img.shields.io/badge/packs-9-047857)
+![packs](https://img.shields.io/badge/packs-14-047857)
 
 ![Live dashboard](docs/images/dashboard_live.png)
 
-One gateway serves two workspaces: Twenty CRM governance and agent banking. The toggle top-left switches between them.
+One gateway serves three workspaces: Twenty CRM governance, agent banking and securities lending. The toggle top-left switches between them.
 
 ## What it does
 
@@ -95,6 +95,22 @@ Coco governs the rest of what the agent does to the bank on the same engine.
 
 The walkthrough is in [the banking script](docs/banking_demo_script.md); the design is in [docs/architecture.md](docs/architecture.md).
 
+## Securities lending
+
+Coco governs an AI agent booking securities loans on a lending desk. The booking system accepts every well-formed request; Coco reads the live desk blotter at the moment of each action and returns ALLOW, BLOCK or ESCALATE before the loan commits. Each contract is anchored to a [FINOS Common Domain Model](https://cdm.finos.org/) event, the open standard ISLA, ISDA and ICMA built for securities finance.
+
+The hero pipeline shows one booking moving through its lifecycle. Locate and Rate clear, the booking API accepts the request, and then Coco reads the live state: inventory, the borrower's running exposure, the recall flag. The contrast is the story. Without Coco the loan commits and the breach surfaces next morning in reconciliation. With Coco it never books, the rule that fired is named, and the decision is in the audit log.
+
+| Pack | CDM event | The agent | Coco |
+|---|---|---|---|
+| `securities_lending.loan_execution` | NewTrade | Books a loan that breaches the borrower's exposure cap | **BLOCK** before it commits |
+| `securities_lending.collateral` | CollateralUpdate | Posts collateral below the margin threshold | **BLOCK** the posting |
+| `securities_lending.rate` | Execution | Underprices a hard-to-borrow name below its floor | **BLOCK** the fee |
+| `securities_lending.recall` | Recall | Rolls a loan that is already under recall | **BLOCK** the roll |
+| `securities_lending.reporting` | Allocation | Files an SFTR report past the T+1 deadline | **ESCALATE** to a supervisor |
+
+The desk blotter is a fixture standing in for a lending platform such as an extended [FINOS TraderX](https://github.com/finos/traderX); the bridge to a real desk is a design partner with a live workflow. The walkthrough is in [the securities-lending script](docs/seclend_demo_script.md).
+
 ## Action Packs
 
 Twenty CRM:
@@ -107,7 +123,7 @@ Twenty CRM:
 | `twenty.bulk_email` | `send_bulk_email` | Outreach limits, do-not-contact |
 | `twenty.field_update` | `update_field` | Required fields, archived records |
 
-The four banking packs (`banking.wire_transfer`, `banking.add_beneficiary`, `banking.card_controls`, `banking.data_export`) govern the cases above. Packs live in `data/twenty/packs/` and `data/banking/packs/`. Each is about 30 lines of YAML. The DSL is an AST-safe subset of Python: comparisons, booleans and dotted reads, with no calls, dunders or imports. See [`backend/engine/dsl.py`](backend/engine/dsl.py).
+The four banking packs (`banking.wire_transfer`, `banking.add_beneficiary`, `banking.card_controls`, `banking.data_export`) and the five securities-lending packs (`securities_lending.*`) govern the cases above. Packs live in `data/twenty/packs/`, `data/banking/packs/` and `data/securities_lending/packs/`. Each is about 30 lines of YAML. The DSL is an AST-safe subset of Python: comparisons, booleans and dotted reads, with no calls, dunders or imports. See [`backend/engine/dsl.py`](backend/engine/dsl.py).
 
 ## Testing
 
@@ -115,6 +131,7 @@ The four banking packs (`banking.wire_transfer`, `banking.add_beneficiary`, `ban
 PYTHONPATH=$PWD pytest tests/ -v                        # 51 unit tests
 PYTHONPATH=$PWD python tests/run_twenty_scenarios.py    # 19/19 regression
 bash scripts/banking_smoke.sh                           # banking backend, every verdict
+bash scripts/seclend_smoke.sh                           # securities-lending backend, every verdict
 bash scripts/journeys_smoke.sh                          # 6 product journeys
 ```
 
@@ -125,8 +142,8 @@ coco-trust-layer/
 ├── backend/
 │   ├── engine/             pydantic models, AST-safe DSL
 │   ├── routes/             validate, packs, packs_yaml, audit, audit_advanced, scenarios,
-│   │                       metrics, escalations, twenty_ops, demo, demo_bank, mock_obp, dashboard
-│   ├── providers/          twenty.py (CRM state) + bank.py (OBP state)
+│   │                       metrics, escalations, twenty_ops, demo, demo_bank, demo_seclend, mock_obp, dashboard
+│   ├── providers/          twenty.py (CRM state) + bank.py (OBP state) + seclend.py (desk blotter)
 │   ├── dashboard/          templates/index.html + static/{app.js, styles.css, tokens.css}
 │   └── db/audit_log.py     SQLite ledger + escalation_status
 ├── agents/                 Python agent (Twenty REST via the gateway)
@@ -135,7 +152,8 @@ coco-trust-layer/
 ├── data/
 │   ├── twenty/packs/       5 CRM packs + auto-snapshotted _versions/
 │   ├── twenty/scenarios/   19 JSON scenario fixtures
-│   └── banking/            4 banking packs + OBP fixtures (accounts, resources)
+│   ├── banking/            4 banking packs + OBP fixtures (accounts, resources)
+│   └── securities_lending/ 5 CDM-anchored packs + blotter fixtures (securities, counterparties, loans, reports)
 ├── tests/                  pytest + scenario regression
 ├── scripts/                setup_twenty.sh, seed_twenty.py, seed_banking.py,
 │                           banking_smoke.sh, journeys_smoke.sh, snapshot.py

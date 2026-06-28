@@ -20,6 +20,7 @@ from routes import (
     dashboard_router,
     demo_bank_router,
     demo_router,
+    demo_seclend_router,
     escalations_router,
     metrics_router,
     mock_obp_router,
@@ -75,6 +76,7 @@ app.include_router(escalations_router)
 app.include_router(twenty_ops_router)
 app.include_router(demo_router)
 app.include_router(demo_bank_router)
+app.include_router(demo_seclend_router)
 app.include_router(mock_obp_router)
 app.include_router(dashboard_router)
 

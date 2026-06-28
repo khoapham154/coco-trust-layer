@@ -1,0 +1,35 @@
+{
+  "desk_id": "coco-demo-seclend",
+  "reports": {
+    "rpt-clean": {
+      "id": "rpt-clean",
+      "loan_id": "loan-001",
+      "regime": "SFTR",
+      "has_uti": true,
+      "has_lei": true,
+      "has_collateral_type": true,
+      "values_consistent": true,
+      "filed_within_deadline": true
+    },
+    "rpt-missing-uti": {
+      "id": "rpt-missing-uti",
+      "loan_id": "loan-002",
+      "regime": "SFTR",
+      "has_uti": false,
+      "has_lei": true,
+      "has_collateral_type": true,
+      "values_consistent": true,
+      "filed_within_deadline": true
+    },
+    "rpt-late": {
+      "id": "rpt-late",
+      "loan_id": "loan-003",
+      "regime": "SFTR",
+      "has_uti": true,
+      "has_lei": true,
+      "has_collateral_type": true,
+      "values_consistent": true,
+      "filed_within_deadline": false
+    }
+  }
+}

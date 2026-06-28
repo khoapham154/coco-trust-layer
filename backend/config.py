@@ -21,16 +21,23 @@ def _banking_pack_dir() -> Path:
     return repo_root / "data" / "banking" / "packs"
 
 
+def _seclend_pack_dir() -> Path:
+    here = Path(__file__).resolve().parent
+    repo_root = here.parent
+    return repo_root / "data" / "securities_lending" / "packs"
+
+
 def _pack_dirs() -> tuple:
     """Every pack directory loaded at startup.
 
     The primary dir (COCO_PACK_DIR or the Twenty default) plus the bundled
-    banking packs, so one gateway serves both the CRM governance packs and
-    the banking demo. Deduped by resolved path; missing dirs are skipped.
-    Returned as a tuple so the shared Settings attribute stays immutable.
+    banking and securities-lending packs, so one gateway serves the CRM
+    governance packs and both demo verticals. Deduped by resolved path;
+    missing dirs are skipped. Returned as a tuple so the shared Settings
+    attribute stays immutable.
     """
     out: list = []
-    for d in (_default_pack_dir(), _banking_pack_dir()):
+    for d in (_default_pack_dir(), _banking_pack_dir(), _seclend_pack_dir()):
         if d.exists() and all(d.resolve() != e.resolve() for e in out):
             out.append(d)
     return tuple(out)

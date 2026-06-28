@@ -1,0 +1,57 @@
+{
+  "desk_id": "coco-demo-seclend",
+  "securities": {
+    "AAPL": {
+      "id": "AAPL",
+      "name": "Apple Inc",
+      "price": 190.0,
+      "loanable": true,
+      "available_inventory": 80000,
+      "recall_active": false,
+      "corporate_action_active": false,
+      "hard_to_borrow": false,
+      "fee_floor_bps": 15,
+      "fee_ceiling_bps": 75,
+      "benchmark_bps": 35
+    },
+    "GME": {
+      "id": "GME",
+      "name": "GameStop Corp",
+      "price": 25.0,
+      "loanable": true,
+      "available_inventory": 12000,
+      "recall_active": false,
+      "corporate_action_active": false,
+      "hard_to_borrow": true,
+      "fee_floor_bps": 350,
+      "fee_ceiling_bps": 900,
+      "benchmark_bps": 520
+    },
+    "TSLA": {
+      "id": "TSLA",
+      "name": "Tesla Inc",
+      "price": 250.0,
+      "loanable": true,
+      "available_inventory": 50000,
+      "recall_active": true,
+      "corporate_action_active": false,
+      "hard_to_borrow": false,
+      "fee_floor_bps": 40,
+      "fee_ceiling_bps": 120,
+      "benchmark_bps": 60
+    },
+    "RIO": {
+      "id": "RIO",
+      "name": "Rio Tinto Ltd",
+      "price": 110.0,
+      "loanable": false,
+      "available_inventory": 0,
+      "recall_active": false,
+      "corporate_action_active": true,
+      "hard_to_borrow": false,
+      "fee_floor_bps": 20,
+      "fee_ceiling_bps": 80,
+      "benchmark_bps": 30
+    }
+  }
+}

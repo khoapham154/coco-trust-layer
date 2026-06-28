@@ -19,6 +19,7 @@ async def list_packs(request: Request) -> List[Dict[str, Any]]:
                 "id": pack.id,
                 "action": pack.action,
                 "description": pack.description,
+                "cdm_event": pack.cdm_event,
                 "check_count": pack.check_count(),
                 "pre_count": len(pack.pre_conditions),
                 "constraint_count": len(pack.constraints),

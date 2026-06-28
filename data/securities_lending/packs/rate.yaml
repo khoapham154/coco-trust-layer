@@ -1,0 +1,25 @@
+id: securities_lending.rate
+action: agree_rate
+cdm_event: Execution
+description: >
+  Rate governance for the borrow fee agreed on execution. The fee is blocked
+  when it falls below the approved floor for a hard-to-borrow security, the
+  case that signals either a fat-finger error or a manipulated rate on a
+  scarce name, and blocked when it sits above the approved ceiling. A fee
+  inside the band but far from the benchmark is held for a desk review. The
+  approved band and the benchmark live in the desk's rate card, not in the
+  agent's quote. Anchored to the fee term of the CDM Execution event.
+
+constraints:
+  - id: fee_at_or_above_floor
+    rule: request.proposed_fee_bps >= security.fee_floor_bps
+    on_fail: BLOCK
+    reason: Proposed fee is below the approved floor for this security
+  - id: fee_within_ceiling
+    rule: request.proposed_fee_bps <= security.fee_ceiling_bps
+    on_fail: BLOCK
+    reason: Proposed fee is above the approved ceiling for this security
+  - id: fee_near_benchmark
+    rule: request.far_from_benchmark == false
+    on_fail: ESCALATE
+    reason: Proposed fee is far from the benchmark and needs desk review

@@ -1,0 +1,21 @@
+id: securities_lending.recall
+action: roll_loan
+cdm_event: Recall
+description: >
+  Lifecycle governance for rolls and extensions against a live recall. The
+  action is blocked outright when a recall is already live on the loan, since
+  rolling or extending it would breach the lender's recall right and cause a
+  settlement fail. A roll on a loan whose recall deadline sits inside the
+  warning window is held for a human, because the deadline may land before the
+  new term closes. The recall flag and its deadline live in the loan record,
+  not in the agent's roll request. Anchored to the CDM Recall event.
+
+constraints:
+  - id: no_active_recall
+    rule: loan.recall_active == false
+    on_fail: BLOCK
+    reason: Cannot roll or extend a loan while a recall is live
+  - id: not_in_recall_warning_window
+    rule: loan.in_warning_window == false
+    on_fail: ESCALATE
+    reason: Recall deadline is inside the warning window and needs review before rolling

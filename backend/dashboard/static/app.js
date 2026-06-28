@@ -139,6 +139,7 @@
     eye:         '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>',
     copy:        '<rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>',
     bank:        '<line x1="3" y1="21" x2="21" y2="21"></line><line x1="3" y1="10" x2="21" y2="10"></line><polyline points="5 6 12 3 19 6"></polyline><line x1="4" y1="10" x2="4" y2="21"></line><line x1="20" y1="10" x2="20" y2="21"></line><line x1="9" y1="10" x2="9" y2="21"></line><line x1="15" y1="10" x2="15" y2="21"></line>',
+    trending:    '<polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline>',
   };
 
   function mountGlyphs() {
@@ -377,6 +378,8 @@
         { label: "Settings", href: "#/settings", kind: "view" },
         { label: "Agent Banking", href: "#/banking", kind: "view" },
         { label: "Agent actions", href: "#/actions", kind: "view" },
+        { label: "Securities Lending", href: "#/seclend", kind: "view" },
+        { label: "Lifecycle actions", href: "#/seclend_actions", kind: "view" },
       ];
       (state.packs || []).forEach((p) => items.push({ label: p.id, href: `#/packs/${encodeURIComponent(p.id)}`, kind: "pack" }));
       (state.scenarios || []).forEach((s) => items.push({ label: s.id, href: `#/packs/${encodeURIComponent(s.pack_id)}?run=${encodeURIComponent(s.id)}`, kind: "scenario" }));
@@ -405,6 +408,7 @@
   const WORKSPACES = [
     { id: "twenty", label: "Twenty CRM", prefix: "twenty.", home: "live" },
     { id: "banking", label: "Agent Bank", prefix: "banking.", home: "banking" },
+    { id: "securities_lending", label: "Securities Lending", prefix: "securities_lending.", home: "seclend" },
   ];
   function currentWorkspace() {
     return WORKSPACES.find((w) => w.id === state.workspace) || WORKSPACES[0];
@@ -1769,6 +1773,394 @@
       "Each action runs live against the gateway on its own pack and writes a real audit row. The bank is a mock of the Open Bank Project v5.1.0 API: the screening result, card status and export policy live in the record, not in the request the agent submits."));
   };
 
+  /* ---- 8.11 SECURITIES LENDING (loan-booking pipeline) ----------- */
+
+  routes.seclend = async function (root) {
+    // The hero shows one loan booking moving through its lifecycle. The
+    // booking API accepts the request at every scenario; Coco reads the live
+    // blotter and rules on it before it commits. `withoutCoco` is the failure
+    // that lands later, in reconciliation, when nothing stops the booking.
+    const SCENARIOS = [
+      { id: "routine", label: "Book a routine loan", verdictHint: "ALLOW",
+        intent: "Lend 10,000 Apple shares to Citadel Securities.",
+        body: { security_id: "AAPL", counterparty_id: "citadel-sec", quantity: 10000 },
+        withoutCoco: "Books cleanly. There is nothing to catch, and Coco stays out of the way." },
+      { id: "cap", label: "Book past the borrower's cap", verdictHint: "BLOCK",
+        intent: "Lend 10,000 Apple shares to Jane Street.",
+        body: { security_id: "AAPL", counterparty_id: "jane-street", quantity: 10000 },
+        withoutCoco: "The booking API accepts it. The loan commits and pushes Jane Street past its exposure cap. The breach surfaces next morning in reconciliation, as a limit the desk has to unwind and report." },
+      { id: "inventory", label: "Book more than is on the shelf", verdictHint: "BLOCK",
+        intent: "Lend 20,000 GameStop shares to Meridian.",
+        body: { security_id: "GME", counterparty_id: "meridian-bd", quantity: 20000 },
+        withoutCoco: "The booking API accepts it. With only 12,000 on the shelf the loan oversells inventory and ends in a settlement fail at T+2, with buy-in costs and a fail charge." },
+      { id: "recall", label: "Lend a stock under recall", verdictHint: "BLOCK",
+        intent: "Lend 5,000 Tesla shares to Citadel.",
+        body: { security_id: "TSLA", counterparty_id: "citadel-sec", quantity: 5000 },
+        withoutCoco: "The booking API accepts it. Tesla is already under recall for a shareholder vote. The new loan breaches the lender's recall right and forces a late, costly return." },
+      { id: "notional", label: "Book a large notional", verdictHint: "ESCALATE",
+        intent: "Lend 50,000 Apple shares to Citadel.",
+        body: { security_id: "AAPL", counterparty_id: "citadel-sec", quantity: 50000 },
+        withoutCoco: "The booking API accepts it. A $9.5M loan releases on the agent's own authority, with no desk sign-off on a position this size." },
+    ];
+
+    const STAGES = [
+      { n: 1, key: "locate", title: "Locate", role: "The agent matches a borrow request to a security on the desk.", tags: ["Borrow request"] },
+      { n: 2, key: "rate", title: "Rate", role: "The agent agrees a borrow fee inside the desk's band.", tags: ["Desk rate card"] },
+      { n: 3, key: "book", title: "Book loan", role: "Coco reads live inventory, the borrower's running exposure and the recall flag, and rules on the booking before it commits.", tags: ["Coco · securities_lending.loan_execution"], coco: true },
+      { n: 4, key: "settle", title: "Settlement", role: "The loan moves to settlement at T+2.", tags: ["T+2"] },
+      { n: 5, key: "reconcile", title: "Reconciliation", role: "The desk reconciles positions and reports the day's activity.", tags: ["SFTR"] },
+    ];
+
+    const CHECK_LABELS = {
+      security_loanable: "Security is on the lendable list",
+      inventory_covers_quantity: "Inventory covers the quantity",
+      no_recall_or_corporate_action: "No recall or corporate action live",
+      within_counterparty_cap: "Within the borrower's exposure cap",
+      notional_within_desk_limit: "Within the desk auto-approve limit",
+    };
+
+    function stageOutcome(key, verdict, auditId) {
+      const audit = auditId ? `#${auditId}` : "pending";
+      switch (key) {
+        case "locate": return "Borrow request matched. The security is on the lendable list.";
+        case "rate":   return "Fee agreed inside the desk's approved band.";
+        case "settle":
+          if (verdict === "BLOCK") return "Never runs. Coco stopped the booking, so the fail this would have caused never happens.";
+          if (verdict === "ESCALATE") return "Held with the booking. Settlement waits on the approver.";
+          return "Loan settles at T+2. Position booked cleanly.";
+        case "reconcile":
+          if (verdict === "BLOCK") return `Audit row ${audit} records the block and the rule that fired. The breach never reaches the morning reconciliation.`;
+          if (verdict === "ESCALATE") return `Audit row ${audit} opened for the approver.`;
+          return `Logged to audit row ${audit}. The position reconciles clean.`;
+        default: return "";
+      }
+    }
+
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const COCO_IDX = STAGES.findIndex((s) => s.coco);
+
+    let running = false;
+    let selected = SCENARIOS[0];
+
+    const view = h("div", { class: "view" });
+    root.appendChild(view);
+    view.appendChild(h("div", { class: "view-head" },
+      h("div", {},
+        h("h1", { class: "view-title" }, "Securities Lending"),
+        h("p", { class: "view-sub" }, "An AI agent books a securities loan. The booking API accepts every request; Coco reads the live desk blotter and rules allow, block or escalate before the loan commits. Each contract is anchored to a FINOS Common Domain Model event."),
+      ),
+    ));
+
+    const chipRow = h("div", { class: "bk-chips" });
+    const intentLine = h("p", { class: "bk-intent" }, selected.intent);
+    const errLine = h("p", { class: "bk-error", style: { display: "none" } });
+    const runBtn = h("button", { class: "btn btn-primary bk-run", onClick: () => run() }, "Book loan");
+    const contrastHost = h("div", {});
+
+    function refreshChips() {
+      chipRow.innerHTML = "";
+      SCENARIOS.forEach((s) => chipRow.appendChild(h("button", {
+        class: "chip", "aria-pressed": s.id === selected.id ? "true" : "false",
+        onClick: () => {
+          if (running) return;
+          selected = s;
+          intentLine.textContent = s.intent;
+          errLine.style.display = "none";
+          contrastHost.innerHTML = "";
+          refreshChips();
+          buildRail();
+        },
+      }, s.label)));
+    }
+    refreshChips();
+
+    view.appendChild(h("div", { class: "card" },
+      h("div", { class: "card-body" },
+        h("div", { class: "bk-control-label" }, "The agent wants to"),
+        chipRow, intentLine, runBtn, errLine,
+      ),
+    ));
+
+    const rail = h("div", { class: "bk-rail" });
+    view.appendChild(rail);
+    view.appendChild(contrastHost);
+
+    view.appendChild(h("p", { class: "bk-foot" },
+      "The booking stage runs live against the gateway and writes a real audit row. The desk blotter is a fixture standing in for a lending platform such as an extended FINOS TraderX: inventory, the borrower's exposure and the recall flag live in the blotter, not in the booking request the agent submits."));
+
+    let stageEls = [];
+    function buildRail() {
+      rail.innerHTML = "";
+      stageEls = STAGES.map((stage) => {
+        const outcome = h("p", { class: "bk-outcome" });
+        const panelHost = h("div", {});
+        const card = h("div", { class: "bk-stage", dataset: { status: "pending", coco: stage.coco ? "true" : "false" } },
+          h("span", { class: "bk-num" }, String(stage.n)),
+          h("div", { class: "bk-stage-main" },
+            h("div", { class: "bk-stage-head" },
+              h("h3", { class: "bk-stage-title" }, stage.title),
+              h("span", { class: "bk-dot" }),
+            ),
+            h("p", { class: "bk-role" }, stage.role),
+            h("div", { class: "bk-vendors" }, ...stage.tags.map((t) =>
+              h("span", { class: "bk-vendor", dataset: { coco: stage.coco ? "true" : "false" } }, t))),
+            outcome, panelHost,
+          ),
+        );
+        rail.appendChild(card);
+        return { stage, card, outcome, panelHost };
+      });
+    }
+    buildRail();
+
+    function applyStep(step, decision) {
+      stageEls.forEach((el, i) => {
+        const status = step > i ? "done" : step === i ? "active" : "pending";
+        el.card.dataset.status = status;
+        if (el.stage.coco) {
+          el.card.dataset.verdict = decision ? decision.verdict : "";
+          el.panelHost.innerHTML = "";
+          if (decision && step >= i) el.panelHost.appendChild(renderBookPanel(decision));
+        } else {
+          el.outcome.textContent = status === "done"
+            ? stageOutcome(el.stage.key, decision ? decision.verdict : "ALLOW", decision ? decision.audit_id : null)
+            : "";
+        }
+      });
+    }
+
+    function renderBookPanel(d) {
+      const bv = d.booking_view || {};
+      const money = (n) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
+      const apiCard = h("div", { class: "bk-panel-card" },
+        h("p", { class: "bk-panel-label" }, "Booking API"),
+        h("p", { class: "bk-balance" }, money(bv.notional || 0)),
+        h("p", { class: "bk-sub" }, `${bv.quantity != null ? bv.quantity.toLocaleString() : "—"} ${bv.security || ""} → ${bv.counterparty || ""}`),
+        h("div", { class: "bk-obp-status" }, h("span", { class: "bk-obp-dot" }), (d.platform_view && d.platform_view.status) || "ACCEPTED"),
+        h("p", { class: "bk-note" }, (d.platform_view && d.platform_view.note) || ""),
+      );
+      const checksCard = h("div", { class: "bk-panel-card", dataset: { v: d.verdict } },
+        h("p", { class: "bk-panel-label" }, "Live blotter state Coco read"),
+        h("div", { class: "bk-checks" }, ...(d.checks || []).map((c) =>
+          h("div", { class: "bk-check" },
+            h("span", { class: c.passed ? "bk-check-label" : "bk-check-label bk-fail" }, CHECK_LABELS[c.check_id] || c.check_id),
+            h("span", { class: c.passed ? "bk-check-flag" : "bk-check-flag bk-fail" }, c.passed ? "pass" : "fail"),
+          ))),
+      );
+      const banner = h("div", { class: "bk-verdict-banner", dataset: { v: d.verdict } },
+        h("span", { class: "verdict verdict-lg", "data-v": d.verdict }, d.verdict),
+        h("span", { class: "bk-reason" }, d.primary_reason),
+      );
+      const ts = new Date(d.timestamp);
+      const tstr = Number.isNaN(ts.getTime()) ? d.timestamp : ts.toLocaleTimeString();
+      const cdm = d.cdm_event ? ` · CDM ${d.cdm_event}` : "";
+      const audit = h("p", { class: "bk-audit" }, `audit #${d.audit_id != null ? d.audit_id : "—"} · ${tstr} · ${d.pack_id}${cdm}`);
+      return h("div", { class: "bk-panel" }, h("div", { class: "bk-panel-grid" }, apiCard, checksCard), banner, audit);
+    }
+
+    function renderContrast(scenario, d) {
+      const blocked = d.verdict !== "ALLOW";
+      const withTone = d.verdict === "ALLOW" ? "good" : d.verdict === "ESCALATE" ? "hold" : "bad";
+      const withBody = d.verdict === "ALLOW"
+        ? "ALLOW. Every check passed against the live blotter, so the loan books and Coco logs it."
+        : d.verdict === "ESCALATE"
+          ? `${d.primary_reason}. Coco pauses the booking and hands it to a human, with the reason on the record.`
+          : `${d.primary_reason}. Coco blocks the booking at the action boundary, before it commits, and names the rule that fired.`;
+      const auditLine = d.audit_id != null
+        ? h("a", { class: "sl-panel-foot", href: `#/audit?id=${d.audit_id}` }, `audit #${d.audit_id}${d.cdm_event ? " · CDM " + d.cdm_event : ""}`)
+        : h("p", { class: "sl-panel-foot" }, "");
+      return h("div", { class: "sl-contrast" },
+        h("div", { class: "sl-panel", dataset: { tone: blocked ? "bad" : "good" } },
+          h("p", { class: "sl-panel-label" }, "Without Coco"),
+          h("p", { class: "sl-panel-body" }, scenario.withoutCoco),
+        ),
+        h("div", { class: "sl-panel", dataset: { tone: withTone } },
+          h("p", { class: "sl-panel-label" }, "With Coco"),
+          h("p", { class: "sl-panel-body" }, withBody),
+          auditLine,
+        ),
+      );
+    }
+
+    async function run() {
+      if (running) return;
+      running = true;
+      runBtn.disabled = true;
+      errLine.style.display = "none";
+      contrastHost.innerHTML = "";
+      buildRail();
+      applyStep(0, null);
+
+      let decision;
+      try {
+        decision = await api.fetchJson("/api/demo/seclend/book_loan", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(selected.body),
+        });
+      } catch (e) {
+        errLine.textContent = e && e.message ? e.message : "Cannot reach the gateway.";
+        errLine.style.display = "";
+        running = false;
+        runBtn.disabled = false;
+        return;
+      }
+
+      for (let i = 0; i <= STAGES.length; i++) {
+        applyStep(i, decision);
+        await sleep(i === COCO_IDX ? 950 : 600);
+      }
+      contrastHost.appendChild(renderContrast(selected, decision));
+      refreshEscalationBadge();
+      running = false;
+      runBtn.disabled = false;
+    }
+  };
+
+  /* ---- 8.12 LIFECYCLE ACTIONS (other securities-lending contracts) - */
+
+  routes.seclend_actions = async function (root) {
+    // The other contracts in the loan lifecycle. Each runs live against the
+    // gateway on its own pack and writes a real audit row. `fallout` is what
+    // goes wrong without Coco when the verdict is not ALLOW.
+    const ACTIONS = [
+      {
+        key: "collateral", title: "Post collateral", endpoint: "/api/demo/seclend/post_collateral",
+        sub: "The borrower posts or substitutes collateral. Coco checks it is eligible and meets the margin threshold before it lands, and holds a concentrated substitution for review.",
+        labels: { collateral_eligible: "Collateral type is eligible", meets_margin_threshold: "Meets the margin threshold", concentration_within_limit: "Within the concentration limit" },
+        scenarios: [
+          { id: "ok", label: "Post cash collateral in full", intent: "Post 2,000,000 in cash against loan-001.", body: { loan_id: "loan-001", posted_value: 2000000, collateral_type: "cash", concentration_pct: 0 } },
+          { id: "short", label: "Post below the margin threshold", intent: "Post 1,900,000 against loan-001.", body: { loan_id: "loan-001", posted_value: 1900000, collateral_type: "cash", concentration_pct: 0 }, fallout: "The loan runs under-collateralised. If the borrower defaults, the lender is short on a position it believed was covered." },
+          { id: "concentration", label: "Substitute into concentrated equity", intent: "Substitute 2,000,000 of equity collateral into loan-001.", body: { loan_id: "loan-001", posted_value: 2000000, collateral_type: "equity", concentration_pct: 30 }, fallout: "The collateral pool tips past its concentration limit, leaving the lender over-exposed to one asset type." },
+        ],
+      },
+      {
+        key: "rate", title: "Agree a borrow fee", endpoint: "/api/demo/seclend/check_rate",
+        sub: "The agent agrees the borrow fee on execution. A fee below the floor on a hard-to-borrow name is blocked, and a fee far from the benchmark is held for the desk.",
+        labels: { fee_at_or_above_floor: "At or above the approved floor", fee_within_ceiling: "Within the approved ceiling", fee_near_benchmark: "Close to the benchmark" },
+        scenarios: [
+          { id: "ok", label: "Quote a fee inside the band", intent: "Quote 35 bps to borrow Apple.", body: { security_id: "AAPL", proposed_fee_bps: 35 } },
+          { id: "floor", label: "Underprice a hard-to-borrow name", intent: "Quote 200 bps to borrow GameStop.", body: { security_id: "GME", proposed_fee_bps: 200 }, fallout: "A scarce name is lent far below its floor. That is lost fee income at best and a manipulated rate at worst." },
+          { id: "bench", label: "Quote far from the benchmark", intent: "Quote 70 bps to borrow Apple.", body: { security_id: "AAPL", proposed_fee_bps: 70 }, fallout: "An off-market fee books unreviewed, the kind of print that draws questions from a regulator." },
+        ],
+      },
+      {
+        key: "recall", title: "Roll or extend a loan", endpoint: "/api/demo/seclend/roll_loan",
+        sub: "The agent rolls an open loan into a new term. A roll against a live recall is blocked outright, and a roll close to a recall deadline is held for a human.",
+        labels: { no_active_recall: "No live recall", not_in_recall_warning_window: "Recall deadline not near" },
+        scenarios: [
+          { id: "ok", label: "Roll a loan with no recall", intent: "Roll loan-001 into a new term.", body: { loan_id: "loan-001", action: "roll" } },
+          { id: "recall", label: "Roll a loan under recall", intent: "Roll loan-002 into a new term.", body: { loan_id: "loan-002", action: "roll" }, fallout: "The roll extends a loan the lender has already recalled, breaching the recall right and forcing a late return." },
+          { id: "window", label: "Roll close to a recall deadline", intent: "Roll loan-003 into a new term.", body: { loan_id: "loan-003", action: "roll" }, fallout: "The roll runs past an imminent recall deadline, risking a fail the moment the recall lands." },
+        ],
+      },
+      {
+        key: "reporting", title: "Submit a regulatory report", endpoint: "/api/demo/seclend/submit_report",
+        sub: "The agent submits the trade report under SFTR. A report missing a required field is blocked, and a report filed past the T+1 deadline is held for a supervisor.",
+        labels: { uti_present: "UTI present", lei_present: "Counterparty LEI present", collateral_type_present: "Collateral type present", values_internally_consistent: "Values internally consistent", filed_within_deadline: "Filed within T+1" },
+        scenarios: [
+          { id: "ok", label: "Submit a complete report", intent: "Submit the SFTR report for loan-001.", body: { report_id: "rpt-clean" } },
+          { id: "uti", label: "Submit with a missing UTI", intent: "Submit the SFTR report for loan-002.", body: { report_id: "rpt-missing-uti" }, fallout: "An incomplete report goes to the regulator, a reporting breach the desk has to correct and explain." },
+          { id: "late", label: "Submit past the T+1 deadline", intent: "Submit the SFTR report for loan-003.", body: { report_id: "rpt-late" }, fallout: "A late report files silently unless a supervisor owns the breach, which is what Coco forces." },
+        ],
+      },
+    ];
+
+    function renderResult(d, labels, scenario) {
+      const banner = h("div", { class: "bk-verdict-banner", dataset: { v: d.verdict } },
+        h("span", { class: "verdict verdict-lg", "data-v": d.verdict }, d.verdict),
+        h("span", { class: "bk-reason" }, d.primary_reason),
+      );
+      const checks = h("div", { class: "bk-checks" }, ...(d.checks || []).map((c) =>
+        h("div", { class: "bk-check" },
+          h("span", { class: c.passed ? "bk-check-label" : "bk-check-label bk-fail" }, labels[c.check_id] || c.check_id),
+          h("span", { class: c.passed ? "bk-check-flag" : "bk-check-flag bk-fail" }, c.passed ? "pass" : "fail"),
+        )));
+      const kids = [banner, checks];
+      if (d.verdict !== "ALLOW" && scenario && scenario.fallout) {
+        kids.push(h("p", { class: "sl-fallout" }, h("strong", {}, "Without Coco: "), scenario.fallout));
+      }
+      const ts = new Date(d.timestamp);
+      const tstr = Number.isNaN(ts.getTime()) ? d.timestamp : ts.toLocaleTimeString();
+      const cdm = d.cdm_event ? ` · CDM ${d.cdm_event}` : "";
+      const line = `audit #${d.audit_id != null ? d.audit_id : "—"} · ${tstr} · ${d.pack_id}${cdm}`;
+      kids.push(d.audit_id != null
+        ? h("a", { class: "bk-audit", href: `#/audit?id=${d.audit_id}` }, line)
+        : h("p", { class: "bk-audit" }, line));
+      return h("div", { class: "bk-action-result" }, ...kids);
+    }
+
+    const view = h("div", { class: "view" });
+    root.appendChild(view);
+    view.appendChild(h("div", { class: "view-head" },
+      h("div", {},
+        h("h1", { class: "view-title" }, "Lifecycle actions"),
+        h("p", { class: "view-sub" }, "A loan is a chain of stateful transitions, and Coco governs each one. Pick what the agent tries: the gateway reads the live blotter and rules allow, block or escalate before it commits, then writes the verdict to the audit ledger."),
+      ),
+    ));
+
+    ACTIONS.forEach((a) => {
+      let selected = a.scenarios[0];
+      let running = false;
+      const chipRow = h("div", { class: "bk-chips" });
+      const intentLine = h("p", { class: "bk-intent" }, selected.intent);
+      const errLine = h("p", { class: "bk-error", style: { display: "none" } });
+      const resultHost = h("div", {});
+      const runBtn = h("button", { class: "btn btn-primary bk-run", onClick: () => run() }, "Run check");
+
+      function refreshChips() {
+        chipRow.innerHTML = "";
+        a.scenarios.forEach((s) => chipRow.appendChild(h("button", {
+          class: "chip", "aria-pressed": s.id === selected.id ? "true" : "false",
+          onClick: () => {
+            if (running) return;
+            selected = s;
+            intentLine.textContent = s.intent;
+            errLine.style.display = "none";
+            resultHost.innerHTML = "";
+            refreshChips();
+          },
+        }, s.label)));
+      }
+      refreshChips();
+
+      async function run() {
+        if (running) return;
+        running = true;
+        runBtn.disabled = true;
+        errLine.style.display = "none";
+        resultHost.innerHTML = "";
+        try {
+          const d = await api.fetchJson(a.endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(selected.body),
+          });
+          resultHost.appendChild(renderResult(d, a.labels, selected));
+          refreshEscalationBadge();
+        } catch (e) {
+          errLine.textContent = e && e.message ? e.message : "Cannot reach the gateway.";
+          errLine.style.display = "";
+        } finally {
+          running = false;
+          runBtn.disabled = false;
+        }
+      }
+
+      view.appendChild(h("div", { class: "card" },
+        h("div", { class: "card-body" },
+          h("h3", { class: "bk-action-title" }, a.title),
+          h("p", { class: "view-sub" }, a.sub),
+          h("div", { class: "bk-control-label" }, "The agent wants to"),
+          chipRow, intentLine, runBtn, errLine, resultHost,
+        ),
+      ));
+    });
+
+    view.appendChild(h("p", { class: "bk-foot" },
+      "Each action runs live against the gateway on its own CDM-anchored pack and writes a real audit row. Inventory, margin thresholds, recall flags and report completeness live in the desk blotter, not in the request the agent submits."));
+  };
+
   /* =================================================================
    * 9. BOOTSTRAP
    * ================================================================= */
@@ -1777,6 +2169,7 @@
 
   function routeWorkspace(route) {
     if (route === "banking" || route === "actions") return "banking";
+    if (route === "seclend" || route === "seclend_actions") return "securities_lending";
     if (route === "integrations") return "twenty";
     return null;  // live/escalations/audit/packs/settings are shared; keep the current workspace
   }

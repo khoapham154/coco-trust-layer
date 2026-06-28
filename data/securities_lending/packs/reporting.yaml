@@ -1,0 +1,41 @@
+id: securities_lending.reporting
+action: submit_report
+cdm_event: Allocation
+description: >
+  Reporting integrity governance for regulatory submission. The submission is
+  blocked when a required field is missing, the Unique Transaction Identifier,
+  a counterparty LEI, or the collateral type, and blocked when the values are
+  internally inconsistent. A report filed past the T+1 deadline is held for
+  supervisor sign-off rather than submitted silently. Field completeness and
+  the deadline are computed from the desk's own records, not asserted by the
+  agent. Anchored to the CDM Allocation reporting event under SFTR.
+
+pre_conditions:
+  - id: uti_present
+    type: equals
+    path: report.has_uti
+    value: true
+    on_fail: BLOCK
+    reason: Report is missing the Unique Transaction Identifier
+  - id: lei_present
+    type: equals
+    path: report.has_lei
+    value: true
+    on_fail: BLOCK
+    reason: Report is missing a counterparty LEI
+  - id: collateral_type_present
+    type: equals
+    path: report.has_collateral_type
+    value: true
+    on_fail: BLOCK
+    reason: Report is missing the collateral type field
+
+constraints:
+  - id: values_internally_consistent
+    rule: report.values_consistent == true
+    on_fail: BLOCK
+    reason: Report values are internally inconsistent
+  - id: filed_within_deadline
+    rule: report.filed_within_deadline == true
+    on_fail: ESCALATE
+    reason: Report is past the T+1 deadline and needs supervisor sign-off
