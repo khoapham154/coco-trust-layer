@@ -16,19 +16,21 @@ Here is the agent on an ordinary Tuesday, running payroll. Discovery finds the b
 
 ## Beat 2: the moment of truth (~40s)
 
-[SHOW: pick "Wire $2M to a flagged entity", Initiate. Pause as stages 1 to 3 go green.]
+[SHOW: pick "Pay a $2M supplier invoice", Initiate. Pause as stages 1 to 3 go green.]
 
-Now the same agent has a different instruction: wire two million dollars to Hint Global Trading. Watch the first three layers go green. Identity confirmed, authorisation confirmed, and the bank's own payment API checks the request and calls it valid. Every layer so far has said yes. If this is where you stop, the money is already gone.
+Now the same agent has a different instruction: pay a two million dollar invoice from Harbourline Manufacturing, a supplier this account has paid for years. What nobody in the chain can see is that the invoice was tampered with upstream. One field was swapped, the account number. The name still reads right, the amount still reads right, but the money is now pointed at an account the attacker controls.
+
+Watch the first three layers go green. Identity confirmed, authorisation confirmed, and the bank's own payment API checks the request and calls it valid. Every layer so far has said yes. If this is where you stop, the money is already gone.
 
 [SHOW: stage four reveals BLOCK.]
 
-Then Coco reads the live state of the account the way a person would, and it finds a sanctions hold the payment API never shows. Without Coco, every earlier layer has already said yes, so the two million leaves the account and lands with a sanctioned entity, and the bank only finds out later, once the money is gone. With Coco, the transfer never executes. It is blocked before it reaches SWIFT, the rule that fired is named, and the reason is written to the audit log. The hold was real and it sat in the bank's own records. The payment API just does not carry it, so a fast agent never sees it, and that blind spot is where laundering hides.
+Then Coco reads the live account the way a person would. The payee is approved. The amount sits inside the limit somebody set last quarter. And the destination does not match the account this supplier is approved to receive at. Coco blocks the transfer before it reaches SWIFT, names the rule that fired, and writes the reason to the audit log. Without Coco, every earlier layer has already said yes, so the two million leaves the account and lands with the attacker, and the bank finds out when the real supplier calls about an unpaid invoice. This one does not come back.
 
 ## Beat 3: judgement, not a rule (~20s)
 
 [SHOW: pick "Settle a $250k invoice", Initiate, stage four reveals ESCALATE.]
 
-One last transfer. A quarter of a million dollars to a supplier. The payee is clean, there is no hold, nothing is technically wrong with it. It is simply a lot of money for an agent to release on its own. Without Coco, nothing stops it: the agent pays a quarter of a million on its own authority, and no person sees it until it is already gone. With Coco, stage four does not decide this one. It pauses the payment, sends it to a human to approve, and logs whatever they choose. The agent stays fast on the routine work, and a person owns the big release.
+One last transfer. A quarter of a million dollars to a supplier. The payee is approved, the destination matches the account on file, nothing is technically wrong with it. It is simply a lot of money for an agent to release on its own. Without Coco, nothing stops it: the agent pays a quarter of a million on its own authority, and no person sees it until it is already gone. With Coco, stage four does not decide this one. It pauses the payment, sends it to a human to approve, and logs whatever they choose. The agent stays fast on the routine work, and a person owns the big release.
 
 ## Beat 4: the same judgement, everywhere the agent acts (~35s)
 
@@ -36,7 +38,7 @@ One last transfer. A quarter of a million dollars to a supplier. The payee is cl
 
 Moving money is only one thing this agent does. It also adds new payees, changes card limits, and pulls customer data. Coco governs all of it on the same contract.
 
-[SHOW: run "Add a sanctioned-jurisdiction entity".] Here the agent adds a new payee in a sanctioned jurisdiction. That is how fraud usually starts, one quiet new beneficiary. Coco blocks it before a dollar can ever be sent there.
+[SHOW: run "Add a payee that fails account verification".] Here the agent adds a new payee whose account details do not match the record at the receiving bank. That is how fraud usually starts, one quiet new beneficiary. Coco blocks it before a dollar can ever be sent there.
 
 [SHOW: run "Raise a card to 250,000".] Here it raises a corporate card limit to a quarter of a million. Nothing is wrong with the card, the number is just high, so Coco sends it to a manager.
 
@@ -52,13 +54,13 @@ And it is not only wires. Every action the agent takes against the bank runs thr
 
 ## Questions they will ask
 
-**Why does the bank have a sanctions hold its own payment API cannot see?**
+**Why does nothing else catch the swapped account number?**
 
-The hold is real, placed by compliance in a separate screening system, not the payments system. The payment API only confirms the account is open, funded, and the request is well-formed; it does not carry sanctions state. A human would catch the hold on the compliance screen, but the agent only sees the API.
+Because every other control checks something that is genuinely fine. Identity passes, because the agent's credential is real. Screening passes, because the attacker's account is clean, no history, nothing to flag. The spend cap passes, because two million sits inside a limit somebody set last quarter. The payment API accepts the call, because it only answers whether the request is technically valid. Not one of them checks the only thing that mattered, whether this is the payee the client actually intended. That record lives in the bank's beneficiary register, and the payment API does not carry it.
 
 **Would settlement not reject it anyway?**
 
-Sometimes, late and expensively, and not on instant rails. Many holds are advisory case-holds that need a decision, not hard ledger blocks. A payment that is released and then clawed back is still a reportable event and an operational mess. Coco stops it before it commits, with the reason logged.
+No. The receiving account is real, open and clean, so settlement completes without a murmur. This is authorised push-payment fraud: once the money lands it is moved on within minutes, and recovery rates are low. On instant rails there is no window at all. Coco stops it before it commits, with the reason logged.
 
 **Why does the $250k need a human when nothing is wrong with it?**
 

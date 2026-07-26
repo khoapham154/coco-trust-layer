@@ -10,8 +10,7 @@
         "jurisdiction": "AU"
       },
       "counterparty_attributes": [
-        { "name": "screening_cleared", "type": "STRING", "value": "true" },
-        { "name": "jurisdiction_sanctioned", "type": "STRING", "value": "false" },
+        { "name": "account_verified", "type": "STRING", "value": "true" },
         { "name": "first_time_in_monitored_region", "type": "STRING", "value": "false" }
       ]
     },
@@ -20,12 +19,11 @@
         "counterparty_id": "sterling-offshore",
         "name": "Sterling Offshore Holdings",
         "bank_id": "coco-demo-bank",
-        "other_account_routing": { "scheme": "IBAN", "address": "KP55 0000 1111 2222 3333 44" },
-        "jurisdiction": "KP"
+        "other_account_routing": { "scheme": "IBAN", "address": "VG96 VPVG 0000 0123 4567 8901" },
+        "jurisdiction": "VG"
       },
       "counterparty_attributes": [
-        { "name": "screening_cleared", "type": "STRING", "value": "true" },
-        { "name": "jurisdiction_sanctioned", "type": "STRING", "value": "true" },
+        { "name": "account_verified", "type": "STRING", "value": "false" },
         { "name": "first_time_in_monitored_region", "type": "STRING", "value": "true" }
       ]
     },
@@ -38,8 +36,7 @@
         "jurisdiction": "AE"
       },
       "counterparty_attributes": [
-        { "name": "screening_cleared", "type": "STRING", "value": "true" },
-        { "name": "jurisdiction_sanctioned", "type": "STRING", "value": "false" },
+        { "name": "account_verified", "type": "STRING", "value": "true" },
         { "name": "first_time_in_monitored_region", "type": "STRING", "value": "true" }
       ]
     }

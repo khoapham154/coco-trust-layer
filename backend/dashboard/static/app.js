@@ -1437,11 +1437,14 @@
   routes.banking = async function (root) {
     const SCENARIOS = [
       { id: "payroll", label: "Run payroll", agentIntent: "Pay the fortnightly payroll batch to PayCycle.",
-        accountId: "operating-au-001", accountLabel: "Operating Account", payee: "PayCycle Payroll Pty Ltd", amount: 5000, currency: "USD" },
-      { id: "sanctioned-wire", label: "Wire $2M to a flagged entity", agentIntent: "Wire 2,000,000 to Hint Global Trading FZE.",
-        accountId: "treasury-002", accountLabel: "Treasury Account", payee: "Hint Global Trading FZE", amount: 2000000, currency: "USD" },
+        accountId: "operating-au-001", accountLabel: "Operating Account", payee: "PayCycle Payroll Pty Ltd", amount: 5000, currency: "USD",
+        destinationAccount: "AU41 0620 1188 3355 7742 00" },
+      { id: "tampered-invoice", label: "Pay a $2M supplier invoice", agentIntent: "Pay Harbourline Manufacturing's invoice INV-20418: 2,000,000 to the account on the invoice.",
+        accountId: "treasury-002", accountLabel: "Treasury Account", payee: "Harbourline Manufacturing Co", amount: 2000000, currency: "USD",
+        destinationAccount: "AU72 0100 3344 9021 6691 42" },
       { id: "vendor-settlement", label: "Settle a $250k invoice", agentIntent: "Settle the quarterly logistics invoice with Meridian.",
-        accountId: "payments-003", accountLabel: "Payments Account", payee: "Meridian Logistics Ltd", amount: 250000, currency: "USD" },
+        accountId: "payments-003", accountLabel: "Payments Account", payee: "Meridian Logistics Ltd", amount: 250000, currency: "USD",
+        destinationAccount: "AU33 5210 8890 1144 6627 00" },
     ];
 
     // Five of the six layers are illustrative: we name the vendors that work
@@ -1457,13 +1460,13 @@
 
     const CHECK_LABELS = {
       account_active: "Source account active",
-      no_sanctions_hold: "No sanctions hold",
       payee_approved: "Payee is an approved beneficiary",
-      amount_within_auto_limit: "Within the auto-approve limit",
+      amount_within_auto_limit: "Within the auto-release limit",
+      payee_account_match: "Destination matches the account on file",
     };
 
     // Stages 1 to 3 clear the transfer in every scenario: none of them can
-    // see the hold. Stages 5 and 6 read differently per verdict.
+    // see the beneficiary register. Stages 5 and 6 read differently per verdict.
     function stageOutcome(key, verdict, auditId) {
       const audit = auditId ? `#${auditId}` : "pending";
       switch (key) {
@@ -1534,7 +1537,7 @@
     view.appendChild(rail);
 
     view.appendChild(h("p", { class: "bk-foot" },
-      "Stage four runs live against the gateway and writes a real audit row. The other five layers are illustrative: the demo names the vendors that work at each layer but does not call them. The bank is a mock of the Open Bank Project v5.1.0 API, so the account read returns a clean account while the sanctions hold sits in account attributes the read never returns."));
+      "Stage four runs live against the gateway and writes a real audit row. The other five layers are illustrative: the demo names the vendors that work at each layer but does not call them. The bank is a mock of the Open Bank Project v5.1.0 API, so the account read returns a clean, funded account while the approved-payee register sits in account attributes the read never returns."));
 
     let stageEls = [];
     function buildRail() {
@@ -1596,6 +1599,10 @@
             h("span", { class: c.passed ? "bk-check-flag" : "bk-check-flag bk-fail" }, c.passed ? "pass" : "fail"),
           ))),
       );
+      const t = d.ui_state && d.ui_state.transfer;
+      if (t && t.payee_account_on_file && t.destination_account !== t.payee_account_on_file) {
+        checksCard.appendChild(h("p", { class: "bk-note" }, `Invoice says ${t.destination_account}. On file for this payee: ${t.payee_account_on_file}.`));
+      }
       const banner = h("div", { class: "bk-verdict-banner", dataset: { v: d.verdict } },
         h("span", { class: "verdict verdict-lg", "data-v": d.verdict }, d.verdict),
         h("span", { class: "bk-reason" }, d.primary_reason),
@@ -1619,7 +1626,7 @@
         decision = await api.fetchJson("/api/demo/bank_transfer", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ account_id: selected.accountId, payee: selected.payee, amount: selected.amount, currency: selected.currency }),
+          body: JSON.stringify({ account_id: selected.accountId, payee: selected.payee, amount: selected.amount, currency: selected.currency, destination_account: selected.destinationAccount }),
         });
       } catch (e) {
         errLine.textContent = e && e.message ? e.message : "Cannot reach the gateway.";
@@ -1649,11 +1656,11 @@
         key: "add_beneficiary",
         title: "Add a beneficiary",
         endpoint: "/api/demo/add_beneficiary",
-        sub: "Before an agent can pay a new party it has to add it. Coco screens the payee against sanctions and jurisdiction rules first, because a new beneficiary is the usual first step in a payment-fraud sequence.",
-        labels: { account_active: "Source account active", screening_cleared: "Cleared sanctions and name screening", jurisdiction_allowed: "Jurisdiction is permitted", known_or_low_risk: "Known or low-risk payee" },
+        sub: "Before an agent can pay a new party it has to add it. A new beneficiary is the usual first move in a payment-fraud sequence, so Coco verifies the payee's account details against the record at the receiving bank before the payee can exist.",
+        labels: { account_active: "Source account active", account_verified: "Account details verified with the receiving bank", known_or_low_risk: "Known or low-risk payee" },
         scenarios: [
-          { id: "clean", label: "Add a screened AU supplier", intent: "Add Brightwave Studios as a payee.", body: { account_id: "operating-au-001", counterparty_id: "brightwave-au" } },
-          { id: "sanctioned", label: "Add a sanctioned-jurisdiction entity", intent: "Add Sterling Offshore Holdings as a payee.", body: { account_id: "operating-au-001", counterparty_id: "sterling-offshore" } },
+          { id: "clean", label: "Add a verified AU supplier", intent: "Add Brightwave Studios as a payee.", body: { account_id: "operating-au-001", counterparty_id: "brightwave-au" } },
+          { id: "unverified", label: "Add a payee that fails account verification", intent: "Add Sterling Offshore Holdings as a payee.", body: { account_id: "operating-au-001", counterparty_id: "sterling-offshore" } },
           { id: "first-time", label: "Add a first-time payee in a monitored region", intent: "Add Kepler Trading FZE as a payee.", body: { account_id: "operating-au-001", counterparty_id: "kepler-fze" } },
         ],
       },
@@ -1678,7 +1685,7 @@
         scenarios: [
           { id: "ok", label: "Export 200 contacts with a purpose", intent: "Export 200 CRM contacts for the Q3 campaign.", body: { dataset_id: "crm-contacts", purpose_declared: true, record_count: 200, cross_border: false } },
           { id: "no-purpose", label: "Export with no stated purpose", intent: "Export 200 CRM contacts.", body: { dataset_id: "crm-contacts", purpose_declared: false, record_count: 200, cross_border: false } },
-          { id: "bulk", label: "Export 12,000 records", intent: "Export 12,000 CRM contacts for analysis.", body: { dataset_id: "crm-contacts", purpose_declared: true, record_count: 12000, cross_border: false } },
+          { id: "bulk", label: "Export 20,000 records", intent: "Export 20,000 CRM contacts for analysis.", body: { dataset_id: "crm-contacts", purpose_declared: true, record_count: 20000, cross_border: false } },
         ],
       },
     ];
@@ -1770,7 +1777,7 @@
     });
 
     view.appendChild(h("p", { class: "bk-foot" },
-      "Each action runs live against the gateway on its own pack and writes a real audit row. The bank is a mock of the Open Bank Project v5.1.0 API: the screening result, card status and export policy live in the record, not in the request the agent submits."));
+      "Each action runs live against the gateway on its own pack and writes a real audit row. The bank is a mock of the Open Bank Project v5.1.0 API: the verification result, card status and export policy live in the record, not in the request the agent submits."));
   };
 
   /* ---- 8.11 SECURITIES LENDING (loan-booking pipeline) ----------- */

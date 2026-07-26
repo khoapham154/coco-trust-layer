@@ -1,12 +1,13 @@
 id: banking.wire_transfer
 action: initiate_transfer
 description: >
-  Payment governance for agent-initiated wire transfers. The transfer is
-  blocked when the source account carries a sanctions hold or the payee is
-  not an approved beneficiary, and held for human approval when the amount
-  exceeds the automatic limit. The sanctions hold and the beneficiary list
-  live in account attributes, not in the transaction-request response, so a
-  caller that reads only the OBP transaction API never sees them.
+  Payment governance for agent-initiated wire transfers. The payee must be
+  an approved beneficiary, the destination account must match the account
+  on file for that payee, and a transfer above the account's auto-release
+  limit is held for human approval. The beneficiary register and the
+  auto-release limit live in account attributes, not in the
+  transaction-request response, so a caller that reads only the OBP
+  transaction API never sees them.
 
 pre_conditions:
   - id: account_active
@@ -17,15 +18,15 @@ pre_conditions:
     reason: Source account is not active
 
 constraints:
-  - id: no_sanctions_hold
-    rule: account.sanctions_hold == false
-    on_fail: BLOCK
-    reason: Account is under a sanctions hold recorded in live workflow state
   - id: payee_approved
     rule: transfer.payee_approved == true
     on_fail: BLOCK
     reason: Payee is not an approved beneficiary on this account
   - id: amount_within_auto_limit
-    rule: transfer.amount <= 100000
+    rule: transfer.amount <= account.auto_release_limit
     on_fail: ESCALATE
-    reason: Transfers over 100000 require human approval
+    reason: Transfer exceeds the account's auto-release limit and needs human approval
+  - id: payee_account_match
+    rule: transfer.destination_account == transfer.payee_account_on_file
+    on_fail: BLOCK
+    reason: Destination account does not match the account on file for this payee

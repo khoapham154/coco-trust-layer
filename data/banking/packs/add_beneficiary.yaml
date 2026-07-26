@@ -3,12 +3,12 @@ action: add_beneficiary
 description: >
   Governs an agent adding a new payee to an account, the step that comes
   before any money can be sent to it. A new beneficiary is the usual first
-  move in a payment-fraud sequence, so the payee must clear sanctions and
-  name screening, must not sit in a sanctioned jurisdiction, and a first-time
-  payee in a monitored region is held for a compliance officer. The screening
-  result and the jurisdiction tier live in the counterparty record, not in the
-  request the agent submits, so a caller that trusts the request alone never
-  sees them.
+  move in a payment-fraud sequence, so the payee's account details must
+  verify against the record held at the receiving bank, and a first-time
+  payee in a monitored region is held for a compliance officer. The
+  verification result lives in the counterparty record, not in the request
+  the agent submits, so a caller that trusts the request alone never sees
+  it.
 
 pre_conditions:
   - id: account_active
@@ -19,14 +19,10 @@ pre_conditions:
     reason: Source account is not active
 
 constraints:
-  - id: screening_cleared
-    rule: counterparty.screening_cleared == true
+  - id: account_verified
+    rule: counterparty.account_verified == true
     on_fail: BLOCK
-    reason: Counterparty failed sanctions and name screening
-  - id: jurisdiction_allowed
-    rule: counterparty.jurisdiction_sanctioned == false
-    on_fail: BLOCK
-    reason: Counterparty is registered in a sanctioned jurisdiction
+    reason: Payee account details failed verification with the receiving bank
   - id: known_or_low_risk
     rule: counterparty.first_time_in_monitored_region == false
     on_fail: ESCALATE

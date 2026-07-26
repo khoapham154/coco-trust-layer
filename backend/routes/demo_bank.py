@@ -34,6 +34,9 @@ class BankTransferBody(BaseModel):
     payee: str
     amount: float
     currency: str = "USD"
+    # The destination the agent is about to pay, as it read it off the
+    # invoice. Omitted means the agent used the account on file.
+    destination_account: Optional[str] = None
 
 
 def _resolve(body: BankTransferBody) -> Dict[str, Any]:
@@ -46,7 +49,11 @@ def _resolve(body: BankTransferBody) -> Dict[str, Any]:
     provider = BankStateProvider()
     try:
         ui_state, account_view = provider.transfer_state(
-            body.account_id, body.payee, body.amount, currency=body.currency
+            body.account_id,
+            body.payee,
+            body.amount,
+            currency=body.currency,
+            destination_account=body.destination_account,
         )
     finally:
         provider.close()
@@ -95,7 +102,7 @@ async def bank_transfer(body: BankTransferBody, request: Request) -> Dict[str, A
                 "/owner/transaction-request-types/SANDBOX_TAN/transaction-requests"
             ),
             "status": "INITIATED",
-            "note": "OBP accepts the request. It has no sanctions or beneficiary gate.",
+            "note": "OBP accepts the request. It checks the request is well-formed, not whether the destination is the payee the client intended.",
         },
         "audit_id": audit_id,
         "timestamp": payload["timestamp"],

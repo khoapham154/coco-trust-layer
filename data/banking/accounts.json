@@ -16,9 +16,10 @@
       },
       "account_attributes": [
         { "name": "status", "type": "STRING", "value": "active" },
-        { "name": "sanctions_hold", "type": "STRING", "value": "false" },
         { "name": "daily_limit", "type": "DOUBLE", "value": "500000" },
-        { "name": "approved_beneficiaries", "type": "STRING", "value": "PayCycle Payroll Pty Ltd,Atlassian Pty Ltd,AWS EMEA SARL" }
+        { "name": "auto_release_limit", "type": "DOUBLE", "value": "50000" },
+        { "name": "approved_beneficiaries", "type": "STRING", "value": "PayCycle Payroll Pty Ltd,Atlassian Pty Ltd,AWS EMEA SARL" },
+        { "name": "beneficiary_accounts", "type": "STRING", "value": "PayCycle Payroll Pty Ltd=AU41 0620 1188 3355 7742 00;Atlassian Pty Ltd=AU18 0350 7211 9046 2280 01;AWS EMEA SARL=LU28 0019 4006 4475 0000 00" }
       ]
     },
     "treasury-002": {
@@ -35,9 +36,10 @@
       },
       "account_attributes": [
         { "name": "status", "type": "STRING", "value": "active" },
-        { "name": "sanctions_hold", "type": "STRING", "value": "true" },
         { "name": "daily_limit", "type": "DOUBLE", "value": "5000000" },
-        { "name": "approved_beneficiaries", "type": "STRING", "value": "Northwind Capital LLC,Stripe Payments Australia" }
+        { "name": "auto_release_limit", "type": "DOUBLE", "value": "3000000" },
+        { "name": "approved_beneficiaries", "type": "STRING", "value": "Northwind Capital LLC,Stripe Payments Australia,Harbourline Manufacturing Co" },
+        { "name": "beneficiary_accounts", "type": "STRING", "value": "Northwind Capital LLC=AU20 1250 4477 8890 3312 00;Stripe Payments Australia=AU63 0730 5522 1039 8846 00;Harbourline Manufacturing Co=AU72 0100 3344 9021 5578 00" }
       ]
     },
     "payments-003": {
@@ -54,9 +56,10 @@
       },
       "account_attributes": [
         { "name": "status", "type": "STRING", "value": "active" },
-        { "name": "sanctions_hold", "type": "STRING", "value": "false" },
         { "name": "daily_limit", "type": "DOUBLE", "value": "1000000" },
-        { "name": "approved_beneficiaries", "type": "STRING", "value": "Meridian Logistics Ltd,Telstra Corporation,Google Cloud EMEA" }
+        { "name": "auto_release_limit", "type": "DOUBLE", "value": "100000" },
+        { "name": "approved_beneficiaries", "type": "STRING", "value": "Meridian Logistics Ltd,Telstra Corporation,Google Cloud EMEA" },
+        { "name": "beneficiary_accounts", "type": "STRING", "value": "Meridian Logistics Ltd=AU33 5210 8890 1144 6627 00;Telstra Corporation=AU05 0820 4410 9963 7215 00;Google Cloud EMEA=IE29 AIBK 9311 5212 3456 78" }
       ]
     }
   }

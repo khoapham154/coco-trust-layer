@@ -2,7 +2,7 @@
 
 These reproduce the shape of the real OBP v5.1.0 account API so the demo
 can show a transaction-facing read returning a healthy account while the
-sanctions hold sits in account attributes the read never returns. The
+beneficiary register sits in account attributes the read never returns. The
 agent-banking pipeline demo points the bank state provider at these routes.
 
 This is demo scaffolding, not a real bank. Swap the base URL for a real
@@ -53,7 +53,7 @@ def _resource_record(collection: str, key: str, code: str) -> Dict[str, Any]:
 
 @router.get("/banks/{bank_id}/accounts/{account_id}/{view_id}/account")
 async def get_account(bank_id: str, account_id: str, view_id: str) -> Dict[str, Any]:
-    """The OBP account read. Returns balance and routing, never the hold."""
+    """The OBP account read. Returns balance and routing, never the register."""
     return _account_record(account_id)["account"]
 
 
@@ -65,7 +65,7 @@ async def get_account_attributes(bank_id: str, account_id: str, view_id: str) ->
 
 @router.get("/banks/{bank_id}/counterparties/{counterparty_id}")
 async def get_counterparty(bank_id: str, counterparty_id: str) -> Dict[str, Any]:
-    """A payee record with its screening result and jurisdiction tier."""
+    """A payee record with its verification result and monitored-region flag."""
     return _resource_record("counterparties", counterparty_id, "OBP-50001")
 
 

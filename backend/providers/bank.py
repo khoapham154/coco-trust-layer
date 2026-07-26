@@ -3,10 +3,12 @@
 Builds the `ui_state` dict the `banking.wire_transfer` pack expects from an
 OBP-shaped bank API. The OBP account read returns a healthy account with a
 positive balance, so a caller that trusts the transaction API alone never
-sees a sanctions hold. The hold lives in account attributes. This adapter
-reads both and merges them, which is the whole point of the demo: the gap
-between what the transaction API exposes and what the live account state
-holds is exactly what the gateway gets to enforce on.
+sees the beneficiary register: which payees are approved, and which account
+each payee is approved to receive at. That register lives in account
+attributes. This adapter reads both and merges them, which is the whole
+point of the demo: the gap between what the transaction API exposes and
+what the live account state holds is exactly what the gateway gets to
+enforce on.
 
 The adapter flattens the OBP `account_attributes` list into the scalars the
 pack compares directly, because the DSL does not permit function calls.
@@ -42,6 +44,16 @@ def _as_bool(value: Any) -> bool:
 
 def _flatten_attributes(attributes: list) -> Dict[str, str]:
     return {a["name"]: a["value"] for a in attributes if "name" in a}
+
+
+def _parse_beneficiary_accounts(raw: str) -> Dict[str, str]:
+    """Parse a ``Name=ACCT;Name=ACCT`` attribute into a payee → account map."""
+    out: Dict[str, str] = {}
+    for pair in raw.split(";"):
+        name, sep, acct = pair.partition("=")
+        if sep and name.strip() and acct.strip():
+            out[name.strip()] = acct.strip()
+    return out
 
 
 class BankStateProvider:
@@ -81,23 +93,28 @@ class BankStateProvider:
         amount: float,
         *,
         currency: str = "USD",
+        destination_account: Optional[str] = None,
     ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         """Return ``(ui_state, account_view)`` for ``banking.wire_transfer``.
 
         ``account_view`` is the OBP account read, the "valid" view a caller
-        sees from the transaction API. ``ui_state`` adds the hold and the
-        beneficiary check the read never carried.
+        sees from the transaction API. ``ui_state`` adds the beneficiary
+        register the read never carried: whether the payee is approved, and
+        which account that payee is approved to receive at. When the request
+        names no destination, the agent is taken to have used the account on
+        file.
         """
         record = self._fetch(account_id)
         account = record["account"]
         attrs = _flatten_attributes(record["account_attributes"])
 
         beneficiaries = [b.strip() for b in attrs.get("approved_beneficiaries", "").split(",") if b.strip()]
+        on_file = _parse_beneficiary_accounts(attrs.get("beneficiary_accounts", "")).get(payee)
         ui_state = {
             "account": {
                 "id": account.get("id"),
                 "status": attrs.get("status", "active"),
-                "sanctions_hold": _as_bool(attrs.get("sanctions_hold")),
+                "auto_release_limit": float(attrs.get("auto_release_limit", 0) or 0),
                 "balance": account.get("balance"),
             },
             "transfer": {
@@ -105,6 +122,8 @@ class BankStateProvider:
                 "currency": currency,
                 "payee": payee,
                 "payee_approved": payee in beneficiaries,
+                "destination_account": destination_account or on_file,
+                "payee_account_on_file": on_file,
             },
         }
         return ui_state, account
@@ -116,8 +135,8 @@ class BankStateProvider:
     ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         """Return ``(ui_state, counterparty_view)`` for ``banking.add_beneficiary``.
 
-        The screening result and jurisdiction tier come from the counterparty
-        record, which the agent's add request never carries.
+        The verification result and jurisdiction tier come from the
+        counterparty record, which the agent's add request never carries.
         """
         account = self._fetch(account_id)
         acct_attrs = _flatten_attributes(account["account_attributes"])
@@ -131,8 +150,7 @@ class BankStateProvider:
             "counterparty": {
                 "name": cp.get("name"),
                 "jurisdiction": cp.get("jurisdiction"),
-                "screening_cleared": _as_bool(cp_attrs.get("screening_cleared")),
-                "jurisdiction_sanctioned": _as_bool(cp_attrs.get("jurisdiction_sanctioned")),
+                "account_verified": _as_bool(cp_attrs.get("account_verified")),
                 "first_time_in_monitored_region": _as_bool(cp_attrs.get("first_time_in_monitored_region")),
             },
         }

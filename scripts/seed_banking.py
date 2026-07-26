@@ -38,9 +38,9 @@ PACK_IDS = ("banking.add_beneficiary", "banking.card_controls", "banking.data_ex
 STATES = {
     "banking.add_beneficiary": {
         "action": "add_beneficiary",
-        "ALLOW": {"account": {"status": "active"}, "counterparty": {"screening_cleared": True, "jurisdiction_sanctioned": False, "first_time_in_monitored_region": False}},
-        "BLOCK": {"account": {"status": "active"}, "counterparty": {"screening_cleared": True, "jurisdiction_sanctioned": True, "first_time_in_monitored_region": False}},
-        "ESCALATE": {"account": {"status": "active"}, "counterparty": {"screening_cleared": True, "jurisdiction_sanctioned": False, "first_time_in_monitored_region": True}},
+        "ALLOW": {"account": {"status": "active"}, "counterparty": {"account_verified": True, "first_time_in_monitored_region": False}},
+        "BLOCK": {"account": {"status": "active"}, "counterparty": {"account_verified": False, "first_time_in_monitored_region": False}},
+        "ESCALATE": {"account": {"status": "active"}, "counterparty": {"account_verified": True, "first_time_in_monitored_region": True}},
     },
     "banking.card_controls": {
         "action": "update_card_limit",
@@ -52,7 +52,7 @@ STATES = {
         "action": "export_customer_records",
         "ALLOW": {"policy": {"exports_enabled": True}, "request": {"purpose_declared": True, "record_count": 200, "cross_border": False}},
         "BLOCK": {"policy": {"exports_enabled": True}, "request": {"purpose_declared": False, "record_count": 200, "cross_border": False}},
-        "ESCALATE": {"policy": {"exports_enabled": True}, "request": {"purpose_declared": True, "record_count": 12000, "cross_border": False}},
+        "ESCALATE": {"policy": {"exports_enabled": True}, "request": {"purpose_declared": True, "record_count": 20000, "cross_border": False}},
     },
 }
 

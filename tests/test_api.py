@@ -160,6 +160,50 @@ def test_audit_list(client):
 # --- banking demo endpoints (state read falls back to fixtures here) ------
 
 
+def test_demo_bank_transfer_allow_payroll(client):
+    r = client.post(
+        "/api/demo/bank_transfer",
+        json={"account_id": "operating-au-001", "payee": "PayCycle Payroll Pty Ltd", "amount": 5000, "currency": "USD"},
+    )
+    assert r.status_code == 200
+    data = r.json()
+    assert data["verdict"] == "ALLOW"
+    assert all(c["passed"] for c in data["checks"])
+
+
+def test_demo_bank_transfer_block_tampered_destination(client):
+    # The V&C26 beat: payee name approved, amount inside the auto-release
+    # limit, only the swapped destination account fails.
+    r = client.post(
+        "/api/demo/bank_transfer",
+        json={
+            "account_id": "treasury-002",
+            "payee": "Harbourline Manufacturing Co",
+            "amount": 2000000,
+            "currency": "USD",
+            "destination_account": "AU72 0100 3344 9021 6691 42",
+        },
+    )
+    assert r.status_code == 200
+    data = r.json()
+    assert data["verdict"] == "BLOCK"
+    assert data["failing_check"]["check_id"] == "payee_account_match"
+    assert "account on file" in data["primary_reason"].lower()
+    passed = {c["check_id"] for c in data["checks"] if c["passed"]}
+    assert {"account_active", "payee_approved", "amount_within_auto_limit"} <= passed
+
+
+def test_demo_bank_transfer_escalate_over_auto_limit(client):
+    r = client.post(
+        "/api/demo/bank_transfer",
+        json={"account_id": "payments-003", "payee": "Meridian Logistics Ltd", "amount": 250000, "currency": "USD"},
+    )
+    assert r.status_code == 200
+    data = r.json()
+    assert data["verdict"] == "ESCALATE"
+    assert data["failing_check"]["check_id"] == "amount_within_auto_limit"
+
+
 def test_demo_add_beneficiary_allow(client):
     r = client.post(
         "/api/demo/add_beneficiary",
@@ -171,7 +215,7 @@ def test_demo_add_beneficiary_allow(client):
     assert data["pack_id"] == "banking.add_beneficiary"
 
 
-def test_demo_add_beneficiary_block_sanctioned(client):
+def test_demo_add_beneficiary_block_unverified(client):
     r = client.post(
         "/api/demo/add_beneficiary",
         json={"account_id": "operating-au-001", "counterparty_id": "sterling-offshore"},
@@ -179,7 +223,7 @@ def test_demo_add_beneficiary_block_sanctioned(client):
     assert r.status_code == 200
     data = r.json()
     assert data["verdict"] == "BLOCK"
-    assert "jurisdiction" in data["primary_reason"].lower()
+    assert "verification" in data["primary_reason"].lower()
 
 
 def test_demo_card_limit_escalate(client):

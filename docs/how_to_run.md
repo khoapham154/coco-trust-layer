@@ -16,7 +16,7 @@ tmux send-keys -t coco_gateway \
    uvicorn main:app --app-dir backend --host 0.0.0.0 --port 8080 --reload' Enter
 
 curl -s localhost:8080/health | jq
-curl -s localhost:8080/api/packs | jq 'length'         # → 6 (5 Twenty + 1 banking)
+curl -s localhost:8080/api/packs | jq 'length'         # → 14 (5 Twenty + 4 banking + 5 securities lending)
 curl -s localhost:8080/api/scenarios | jq 'length'     # → 19
 
 open http://localhost:8080/dashboard
@@ -38,7 +38,7 @@ overlay; safe in dev.
 
 ```bash
 cd /mnt/khoa/coco/coco-trust-layer
-PYTHONPATH=$PWD pytest tests/ -v                        # 45 unit tests
+PYTHONPATH=$PWD pytest tests/ -v                        # 72 unit tests
 PYTHONPATH=$PWD python tests/run_twenty_scenarios.py    # 19/19 regression
 bash scripts/journeys_smoke.sh                          # 6 product journeys
 bash scripts/smoke_e2e.sh                               # gateway end-to-end

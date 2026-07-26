@@ -78,9 +78,9 @@ Coco governs an AI agent that operates a bank account. It reads the live account
 
 A wire passes through the layers of the agent-banking trust stack: discovery, identity, authorisation, runtime enforcement, detection, investigation. The other layers check who the agent is and what it may do. Coco checks what is actually true in the account, in the moment, before the money moves.
 
-![Sanctions hold caught at runtime](docs/images/banking_block.png)
+![Payee-account mismatch caught at runtime](docs/images/banking_block.png)
 
-An agent wires $2M and the payment API accepts it, because the request is well-formed and the account is funded. A sanctions hold sits in the account state the payment API never returns. Coco reads that state, fails the check, and blocks the transfer before it reaches SWIFT, with the rule and the reason in the audit row. A $250k transfer with no hold but above the auto-approve limit escalates to a human instead.
+An agent pays a $2M supplier invoice and the payment API accepts it, because the request is well-formed and the account is funded. What nothing in the chain can see is that the invoice was tampered with upstream: the payee name reads right, the amount sits inside the auto-release limit, but the account number points somewhere else. The approved account for each payee sits in the account state the payment API never returns. Coco checks the destination against the account on file for that payee, fails the check, and blocks the transfer before it reaches SWIFT, with the rule and the reason in the audit row. A $250k transfer to a matching account but above the auto-release limit escalates to a human instead.
 
 Coco governs the rest of what the agent does to the bank on the same engine.
 
@@ -88,8 +88,8 @@ Coco governs the rest of what the agent does to the bank on the same engine.
 
 | Case | The agent | Coco |
 |---|---|---|
-| Wire transfer | Sends $2M to a counterparty under a sanctions hold | **BLOCK** before SWIFT |
-| Add beneficiary | Adds a payee in a sanctioned jurisdiction | **BLOCK** before any payment |
+| Wire transfer | Pays a $2M invoice whose account number was swapped upstream | **BLOCK** before SWIFT |
+| Add beneficiary | Adds a payee whose account details fail verification | **BLOCK** before any payment |
 | Card limit | Raises a corporate card limit past the ceiling | **ESCALATE** to a manager |
 | Data export | Pulls customer records with no stated purpose | **BLOCK** the export |
 
@@ -128,7 +128,7 @@ The four banking packs (`banking.wire_transfer`, `banking.add_beneficiary`, `ban
 ## Testing
 
 ```bash
-PYTHONPATH=$PWD pytest tests/ -v                        # 51 unit tests
+PYTHONPATH=$PWD pytest tests/ -v                        # 72 unit tests
 PYTHONPATH=$PWD python tests/run_twenty_scenarios.py    # 19/19 regression
 bash scripts/banking_smoke.sh                           # banking backend, every verdict
 bash scripts/seclend_smoke.sh                           # securities-lending backend, every verdict
